@@ -47,6 +47,8 @@ Module ModuleInterface
     use ModuleSeagrassSedimInteraction
     use ModuleSeagrassWaterInteraction
     use ModuleBivalve
+    use ModuleCarbonateSystem
+  
 
 #ifdef _PHREEQC_ 
     use ModulePhreeqCRM
@@ -249,8 +251,8 @@ Module ModuleInterface
         real(8), pointer, dimension(:    )      :: WaterVolume1D            => null() !Array with volumes from unfold matrix 
         real,    pointer, dimension(:    )      :: CellArea1D               => null()!Array with volumes from unfold matrix
         real,    pointer, dimension(:    )      :: VelocityModulus1D
-        
-
+        real,    pointer, dimension(:    )      :: Latitude1D                => null()
+        real,    pointer, dimension(:    )      :: Longitude1D               => null()
 #ifdef _PHREEQC_        
         real,    pointer, dimension(:    )      :: WaterSaturation          => null()
         real,    pointer, dimension(:    )      :: Porosity                 => null()
@@ -316,6 +318,7 @@ Module ModuleInterface
         
         !Instance of ModuleLife
         integer                                 :: ObjLife              = 0
+        
 #ifdef _BFM_    
         !Instance of ModuleBFM
         integer                                 :: ObjBFM               = 0
@@ -340,6 +343,9 @@ Module ModuleInterface
         
         !Instance of ModuleBivalve
         integer                                 :: ObjBivalve           = 0
+        
+        !Instance of ModuleCarbonateSystem
+        integer                                 :: ObjCarbonateSystem   = 0
 
         !Collection of instances                
         type(T_Interface),          pointer     :: Next => null()
@@ -376,6 +382,7 @@ Module ModuleInterface
                                     Size3D,                                &
                                     Vertical1D,                            &
                                     BivalveID,                             &
+                                    CarbonateSystemID,                     &
 #ifdef _PHREEQC_
                                     SolutionMapping,                       &
                                     EquilibriumMapping,                    &
@@ -394,16 +401,11 @@ Module ModuleInterface
         integer, dimension(:), pointer, optional                :: PropertiesList
         real, intent (OUT)                                      :: DT
         integer, dimension(:,:,:), pointer                      :: WaterPoints3D
-
-
-
-
-
-
-
         type(T_Size3D)                                          :: Size3D
         logical,intent (IN),  optional                          :: Vertical1D
         integer,intent (OUT), optional                          :: BivalveID
+        integer,intent (OUT), optional                          :: CarbonateSystemID
+        
 #ifdef _PHREEQC_
         real, pointer, optional                                 :: SolutionMapping(:,:,:)
         real, pointer, optional                                 :: EquilibriumMapping(:,:,:)
@@ -450,24 +452,19 @@ cd0 :   if (ready_ .EQ. OFF_ERR_) then
                 Me%ExternalVar%Vertical1D = Vertical1D
             else
                 Me%ExternalVar%Vertical1D = .false.
-            endif
-            
+            endif            
 
             !Path to data file
             call ReadInterfaceFilesName
-
             
             call StartSinksSourcesModel(DT)
 
-
-
-
-
-
-
-
             if (present(BivalveID)) then
                 BivalveID = Me%ObjBivalve
+            endif
+            
+           if (present(CarbonateSystemID)) then
+                CarbonateSystemID = Me%ObjCarbonateSystem
             endif
 
             !Verify model DT's
@@ -609,6 +606,7 @@ cd0 :   if (ready_ .EQ. OFF_ERR_) then
                                     RiverPoints1D,                         &
                                     Size1D,                                &
                                     BivalveID,                             &
+                                    CarbonateSystemID,                     &
                                     STAT)
 
         !Arguments-------------------------------------------------------------
@@ -620,6 +618,7 @@ cd0 :   if (ready_ .EQ. OFF_ERR_) then
         integer, dimension(:), pointer                          :: RiverPoints1D
         type(T_Size1D)                                          :: Size1D
         integer,intent (OUT), optional                          :: BivalveID
+        integer,intent (OUT), optional                          :: CarbonateSystemID
         integer,intent (OUT), optional                          :: STAT     
 
         !External--------------------------------------------------------------
@@ -663,7 +662,10 @@ cd0 :   if (ready_ .EQ. OFF_ERR_) then
                 BivalveID = Me%ObjBivalve
             endif
 
-
+            if (present(CarbonateSystemID)) then
+                CarbonateSystemID = Me%ObjCarbonateSystem
+            endif
+                        
             !Verify model DT's
             call CheckDT
 
@@ -805,6 +807,7 @@ cd0 :   if (ready_ .EQ. OFF_ERR_) then
         allocate(Me%AddedProperties(PropLB:PropUB), STAT = STAT_CALL)
         if (STAT_CALL .NE. SUCCESS_)stop 'AllocateVariables - ModuleInterface - ERR08'
         
+                
         select case (Me%SinksSourcesModel)
 
             case (WaterQualityModel)
@@ -1207,6 +1210,25 @@ cd0 :   if (ready_ .EQ. OFF_ERR_) then
                 Me%CellArea1D           = FillValueReal
                 Me%VelocityModulus1D    = FillValueReal
                 
+            case (CarbonateSystemModel)   
+                
+                allocate(Me%Salinity (ArrayLB:ArrayUB), STAT = STAT_CALL)
+                if (STAT_CALL .NE. SUCCESS_)stop 'AllocateVariables - ModuleInterface - ERR160'
+                
+                allocate(Me%Thickness(ArrayLB:ArrayUB), STAT = STAT_CALL)
+                if (STAT_CALL .NE. SUCCESS_)stop 'AllocateVariables - ModuleInterface - ERR161'
+                
+                allocate(Me%Latitude1D(ArrayLB:ArrayUB), STAT = STAT_CALL)
+                if (STAT_CALL .NE. SUCCESS_)stop 'AllocateVariables - ModuleInterface - ERR162' 
+                
+                allocate(Me%Longitude1D(ArrayLB:ArrayUB), STAT = STAT_CALL)
+                if (STAT_CALL .NE. SUCCESS_)stop 'AllocateVariables - ModuleInterface - ERR163' 
+                
+                Me%Salinity             = FillValueReal
+                Me%Thickness            = FillValueReal
+                Me%Latitude1D           = FillValueReal
+                Me%Longitude1D          = FillValueReal
+                
             case default
                 write(*,*) 
                 write(*,*) 'Defined sinks and sources model was not recognised.'
@@ -1218,7 +1240,7 @@ cd0 :   if (ready_ .EQ. OFF_ERR_) then
         Me%Temperature                = FillValueReal
         Me%OpenPoints                 = FillValueInt
         Me%AddedProperties            = .false.
-
+        
         !----------------------------------------------------------------------
 
     end subroutine AllocateVariables   
@@ -1345,11 +1367,17 @@ cd1 :           if(STAT_CALL .EQ. KEYWORD_NOT_FOUND_ERR_) then
                 call ReadFileName('BIV_DAT',Me%FileName, Message = Message, STAT = STAT_CALL)
                 if (STAT_CALL .NE. SUCCESS_)stop 'ReadInterfaceFilesName - ModuleInterface - ERR13' 
                 
+            case(CarbonateSystemModel) 
+                
+                Message  = trim('CarbonateSystem Data File')
+                call ReadFileName('CARBSYST_DATA',Me%FileName, Message = Message, STAT = STAT_CALL)
+                if (STAT_CALL .NE. SUCCESS_)stop 'ReadInterfaceFilesName - ModuleInterface - ERR14' 
+                
             case default
             
                 write(*,*) 
                 write(*,*) 'Defined sinks and sources model was not recognised.'
-                stop 'ReadInterfaceFilesName - ModuleInterface - ERR14' 
+                stop 'ReadInterfaceFilesName - ModuleInterface - ERR15' 
                 
         end select
 
@@ -1362,32 +1390,17 @@ cd1 :           if(STAT_CALL .EQ. KEYWORD_NOT_FOUND_ERR_) then
     !--------------------------------------------------------------------------
     
     subroutine StartSinksSourcesModel (DT)
-    
-
-
-
-
-
-
-        !Arguments-------------------------------------------------------------
+      !Arguments-------------------------------------------------------------
         real, intent(OUT)                       :: DT
-
-
-
-
-
-
-
         !External--------------------------------------------------------------
         integer                                 :: STAT_CALL
         integer                                 :: PropLB, PropUB
-
         !Begin-----------------------------------------------------------------
 
         select case (Me%SinksSourcesModel)
 
             case (WaterQualityModel)
-
+              
                 !Construct WaterQuality Model
                 call StartWaterQuality(Me%ObjWaterQuality,                     &
                                        Me%FileName,                            &
@@ -1797,6 +1810,30 @@ cd1 :           if(STAT_CALL .EQ. KEYWORD_NOT_FOUND_ERR_) then
                 !Get DT from Bivalve model to exit as argument to WaterProperties
                 call GetDTBivalve(Me%ObjBivalve, DTSecond = DT, STAT = STAT_CALL)
                 if (STAT_CALL /= SUCCESS_) stop 'StartSinksSourcesModel - ModuleInterface - ERR122'
+                
+                
+            case(CarbonateSystemModel)
+                
+                !Construct CarbonateSystem Model
+                call ConstructCarbonateSystem(Me%ObjCarbonateSystem,           &
+                                              FileName = Me%FileName,          &
+                                              STAT = STAT_CALL) 
+                if (STAT_CALL /= SUCCESS_) stop 'StartSinksSourcesModel - ModuleInterface - ERR123'
+ 
+                !Number of properties involved
+                call GetCarbonateSystemSize(Me%ObjCarbonateSystem,              &
+                                     PropLB = PropLB,                           &
+                                     PropUB = PropUB,                           &
+                                     STAT   = STAT_CALL)                            
+                if (STAT_CALL /= SUCCESS_) stop 'StartSinksSourcesModel - ModuleInterface - ERR124'
+
+                !Number of properties involved
+                Me%Prop%ILB = PropLB
+                Me%Prop%IUB = PropUB
+
+                !Get DT from CarbonateSystem model to exit as argument to WaterProperties
+                call GetDTCarbonateSystem(Me%ObjCarbonateSystem, DT = DT, STAT = STAT_CALL)
+                if (STAT_CALL /= SUCCESS_) stop 'StartSinksSourcesModel - ModuleInterface - ERR125'
 
             case default
                 write(*,*) 
@@ -2005,6 +2042,7 @@ cd1 :           if(STAT_CALL .EQ. KEYWORD_NOT_FOUND_ERR_) then
         integer, dimension(:), pointer                       :: MacroAlgaeList
         integer                                              :: i,PropLB, PropUB
         integer, dimension(:), pointer                       :: BenthosList, LifeList, BivalveList
+        integer, dimension(:), pointer                       :: CarbonateSystemList
         integer, dimension(:), pointer                       :: BenthicEcologyList
         integer, dimension(:), pointer                       :: SeagrassSedimInteractionList
         integer, dimension(:), pointer                       :: SeagrassWaterInteractionList
@@ -2949,11 +2987,38 @@ cd14 :          if (Phosphorus) then
 
                call UngetBivalve (Me%ObjBivalve, BivalveList, STAT=STAT_CALL)
                if (STAT_CALL /= SUCCESS_) stop 'Check_Options - ModuleInterface - ERR70'
+                              
+              
+               
+           case(CarbonateSystemModel) 
+                                                  
+               call GetCarbonateSystemPropertyList(Me%ObjCarbonateSystem, CarbonateSystemList, STAT_CALL)
+               if(STAT_CALL /= SUCCESS_) stop 'Check_Options - ModuleInterface - ERR80'
+                             
+               !Number of properties involved
+               PropLB = Me%Prop%ILB
+               PropUB = Me%Prop%IUB
+
+               do i = PropLB, PropUB
+
+                   if (.not.FindProperty(PropertiesList, CarbonateSystemList(i))) then
+                       write(*,*) 'Property ',GetPropertyName(CarbonateSystemList(i)),' not found in the CarbonateSystem list'
+                       write(*,*) 'Please check (in Water Properties.dat file) if keyword CARBSYST should be on' 
+                       write(*,*) 'or if the property name', GetPropertyName(CarbonateSystemList(i))
+                       write(*,*) 'is right. In case of alkalinity, or DIC, verify that property name is the one'
+                       write(*,*) 'that matches with the compute option defined in the carbsyst.dat file'
+                             stop 'Properties lists inconsistent  - Check_Options- ModuleInterface- ERR90'    
+                   end if
+               end do
+
+               call UngetCarbonateSystem (Me%ObjCarbonateSystem, CarbonateSystemList, STAT=STAT_CALL)
+               if (STAT_CALL /= SUCCESS_) stop 'Check_Options - ModuleInterface - ERR100'
+               
 
           case default
                write(*,*) 
                write(*,*) 'Defined sinks and sources model was not recognised.'
-               if (STAT_CALL /= SUCCESS_) stop 'Check_Options - ModuleInterface - ERR80'
+               if (STAT_CALL /= SUCCESS_) stop 'Check_Options - ModuleInterface - ERR110'
 
         end select
 
@@ -3051,102 +3116,84 @@ cd14 :          if (Phosphorus) then
                              RateFlux3D,                             &
                              WaterPoints3D,                          &
                              STAT)
-
         !Arguments--------------------------------------------------------------
-        integer                                         :: InterfaceID
-        real,               dimension(:,:,:),   pointer :: RateFlux3D
-        integer,            dimension(:,:,:),   pointer :: WaterPoints3D
-        integer, optional,  intent(IN)                  :: FirstProp
-        integer, optional,  intent(IN)                  :: SecondProp
-        integer, optional,  intent(IN)                  :: RateIndex
-        integer, optional,  intent(OUT)                 :: STAT
-
+        integer                                                 :: InterfaceID
+        real,             intent(OUT),dimension(:,:,:), pointer :: RateFlux3D 
+        integer,           intent(IN),dimension(:,:,:), pointer :: WaterPoints3D
+        integer, optional, intent(IN)                           :: FirstProp
+        integer, optional, intent(IN)                           :: SecondProp
+        integer, optional, intent(IN)                           :: RateIndex
+        integer, optional, intent(OUT)                          :: STAT
         !External--------------------------------------------------------------
         integer                                         :: ready_, STAT_CALL          
-
         !Local-----------------------------------------------------------------
         integer                                         :: STAT_
         integer                                         :: nFirstProp, nSecondProp          
-
-
         integer                                         :: Index
-
         real,    dimension(:), pointer                  :: RateFlux
-
-
-
         !----------------------------------------------------------------------
-
+        !Subroutine preparation
         STAT_ = UNKNOWN_
-
         call Ready(InterfaceID, ready_)   
-         
-
-
-
-
-
-
-
         nullify (RateFlux)
-
 cd1 :   if ((ready_ .EQ. IDLE_ERR_) .OR. (ready_ .EQ. READ_LOCK_ERR_)) then
-
+        !If preparation is okey then
+    
             if (present(FirstProp)) then
-
-                !Number indexed to each property 
-                nFirstProp  = PropertyIndexNumber(FirstProp )
+                !Number indexed to each property. This is, returns the index number of the
+                !property in the biogeochem module (nFirstProp) where is going to be calculated,
+                !based on the global ID that property has. For example, property ammonia, with
+                !global ID = 20 (FirstProp), has an WaterQuality ID = 1 (nFirstProp). @Marta
+                nFirstProp  = PropertyIndexNumber(FirstProp ) 
                 nSecondProp = PropertyIndexNumber(SecondProp)
-
+                
                 !WaterPoints3D
-                Me%ExternalVar%WaterPoints3D => WaterPoints3D
+                Me%ExternalVar%WaterPoints3D => WaterPoints3D 
                 
                 select case (Me%SinksSourcesModel)
 
-                    case (WaterQualityModel)
-
+                case (WaterQualityModel)
+                    
                         call GetWQPropRateFlux( Me%ObjWaterQuality,                     &
                                                 nFirstProp, nSecondProp,                &
                                                 RateFlux, STAT_CALL)
+
                         if (STAT_CALL /= SUCCESS_) stop 'GetRateFlux3D - ModuleInterface - ERR01'
 
-                    case (SedimentQualityModel)
+                case (SedimentQualityModel)     
                     
                         call GetPropRateFlux(Me%ObjSedimentQuality,                     &
                                              nFirstProp, nSecondProp,                   &
                                              RateFlux, STAT_CALL)
                         if (STAT_CALL /= SUCCESS_) stop 'GetRateFlux3D - ModuleInterface - ERR02' 
 
-                    case(LifeModel)
+                    case(LifeModel)           
+  
 #ifdef _BFM_  
                     case(BFMModel)
 #endif  
-                    case (MacroAlgaeModel)
-                    
+                    case (MacroAlgaeModel) 
+                        
                         call GetMacroAlgaeRateFlux(Me%ObjMacroAlgae,                          &
                                                    nFirstProp, nSecondProp,                   &
                                                    RateFlux, STAT_CALL)
                         if (STAT_CALL /= SUCCESS_) stop 'GetRateFlux3D - ModuleInterface - ERR03' 
 
                     case (WWTPQModel)
-
+                        
 !                        call GetWWTPQPropRateFlux( Me%ObjWWTPQ,                     &
 !                                                nFirstProp, nSecondProp,                &
 !                                                RateFlux, STAT_CALL)
-
-
 !                        if (STAT_CALL /= SUCCESS_) stop 'GetRateFlux3D - ModuleInterface - ERR04'
                         
-                    case (SeagrassWaterInteractionModel)
-                          
+                    case (SeagrassWaterInteractionModel)                          
                         call GetSeagrassWaterInteractionRateFlux(Me%ObjSeagrassWaterInteraction,      &
                                                    nFirstProp, nSecondProp,                   &
                                                    RateFlux, STAT_CALL)
                         if (STAT_CALL /= SUCCESS_) stop 'GetRateFlux3D - ModuleInterface - ERR06' 
                     
-                    
-                    case (SeagrassSedimInteractionModel)
-           
+                    case (SeagrassSedimInteractionModel)  
+                        
                         call GetSeagrassSedimInteractionRateFlux(Me%ObjSeagrassSedimInteraction,  &
                                                    nFirstProp, nSecondProp,                   &
                                                    RateFlux, STAT_CALL)
@@ -3155,8 +3202,7 @@ cd1 :   if ((ready_ .EQ. IDLE_ERR_) .OR. (ready_ .EQ. READ_LOCK_ERR_)) then
                 end select
 
             elseif (present(RateIndex)) then
-
-
+                
                 call GetCEQUALW2RateFlux( Me%ObjCeQualW2,                               &
                                           RateIndex, RateFlux,                          &
                                           STAT_CALL)
@@ -3165,43 +3211,13 @@ cd1 :   if ((ready_ .EQ. IDLE_ERR_) .OR. (ready_ .EQ. READ_LOCK_ERR_)) then
 
             endif
 
-            
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-            
-
-
-
-
             !$OMP PARALLEL PRIVATE(Index)
-
             !$OMP DO SCHEDULE(STATIC)
             do Index = Me%Array%ILB, Me%Array%IUB
                 RateFlux3D(Me%Index2I(Index), Me%Index2J(Index), Me%Index2K(Index)) = RateFlux (Index)
-
-
-
-
-
             enddo
             !$OMP END DO NOWAIT
             !$OMP END PARALLEL
-
 
             select case (Me%SinksSourcesModel)
 
@@ -3480,6 +3496,8 @@ cd1 :   if ((ready_ .EQ. IDLE_ERR_) .OR. (ready_ .EQ. READ_LOCK_ERR_)) then
                         if (STAT_CALL /= SUCCESS_) stop 'GetRateFlux1D - ModuleInterface - ERR03'                        
 
                     case(LifeModel)
+                        
+                    !case(CarbonateSystemModel) !Marta: revisar, esto tiene qu estar aquºi?    
 
                 end select
 
@@ -3562,7 +3580,7 @@ cd1 :   if ((ready_ .EQ. IDLE_ERR_) .OR. (ready_ .EQ. READ_LOCK_ERR_)) then
                                   LightExtCoefField, WaterPercentage,                   &
                                   DissolvedToParticulate3D, SoilDryDensity, Salinity,   &
                                   pH, IonicStrength, PhosphorusAdsortionIndex,          &
-                                  
+                                  Latitude, Longitude,                                  & !marta
                                   NintFac3D, NintFac3DR, PintFac3D,                     &
                                   RootsMort, PintFac3DR,                                &
                                   SedimCellVol3D,                                       &
@@ -3588,6 +3606,8 @@ cd1 :   if ((ready_ .EQ. IDLE_ERR_) .OR. (ready_ .EQ. READ_LOCK_ERR_)) then
         real,    optional, dimension(:,:,:), pointer    :: SoilDryDensity
         real,    optional, dimension(:,:,:), pointer    :: Salinity
         real,    optional, dimension(:,:,:), pointer    :: pH
+        real,    optional, dimension(:,:  ), pointer    :: Latitude
+        real,    optional, dimension(:,:  ), pointer    :: Longitude
         
         real,    optional, dimension(:,:,:), pointer    :: NintFac3D  !Isabella
         real,    optional, dimension(:,:,:), pointer    :: NintFac3DR  !Isabella
@@ -3644,11 +3664,6 @@ cd1 :   if ((ready_ .EQ. IDLE_ERR_) .OR. (ready_ .EQ. READ_LOCK_ERR_)) then
         integer                                         :: NLB, NUB
 #endif
 
-
-
-
-
-        
 !        !DEBUG purposes--------------------------------------------------------
 !        real :: old_value, new_value
         
@@ -3676,15 +3691,6 @@ cd1 :   if ((ready_ .EQ. IDLE_ERR_) .OR. (ready_ .EQ. READ_LOCK_ERR_)) then
 
 cd1 :   if (ready_ .EQ. IDLE_ERR_) then
 
-
-
-
-
-
-
-
-
-            
             PropLB  = Me%Prop%ILB
             PropUB  = Me%Prop%IUB
 
@@ -3700,6 +3706,7 @@ cd1 :   if (ready_ .EQ. IDLE_ERR_) then
             if(present(DWZ          ))Me%ExternalVar%DWZ              => DWZ
             if(present(ShearStress  ))Me%ExternalVar%ShearStress      => ShearStress
             if(present(SPMFlux      ))Me%ExternalVar%SPMFlux          => SPMFlux
+
             
              if(present(SeagOccupation))then
                 call UnfoldMatrix(SeagOccupation, Me%SeagOccupation)
@@ -3741,6 +3748,7 @@ cd1 :   if (ready_ .EQ. IDLE_ERR_) then
             if(present(SedimCellVol3D))then
                 call UnfoldMatrix(SedimCellVol3D, Me%SedimCellVol) 
             end if  
+           
             
             Me%ExternalVar%WaterPoints3D => WaterPoints3D
             
@@ -3767,7 +3775,7 @@ cd4 :           if (ReadyToCompute) then
 
                     !Stores the concentration before changing them
                     call SetMatrixValue(Me%ConcentrationIncrement, PropArraySize, Me%Mass)
-
+                    
                     select case (Me%SinksSourcesModel)
 
                         case(WaterQualityModel)
@@ -3776,7 +3784,7 @@ cd4 :           if (ReadyToCompute) then
                             call UnfoldMatrix(LightExtCoefField, Me%LightExtCoefField)
                             call UnfoldMatrix(Me%ExternalVar%DWZ,Me%Thickness)
 
-
+                        
                             call WaterQuality(Me%ObjWaterQuality,                   &
                                               Me%Salinity,                          &
                                               Me%Temperature,                       &
@@ -3963,41 +3971,9 @@ cd4 :           if (ReadyToCompute) then
                                                   is_starting,         &
                                                   STAT_CALL)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
                             if (STAT_CALL /= SUCCESS_) then
                                 if (present(STAT)) STAT = STAT_CALL
                                 return
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
                                 !stop 'Modify_Interface3D - ModuleInterface - ERR14'
                             endif
@@ -4087,6 +4063,30 @@ cd4 :           if (ReadyToCompute) then
                                                TimeIN        = Me%ExternalVar%Now,   &
                                     STAT = STAT_CALL)
                             if (STAT_CALL /= SUCCESS_) stop 'Modify_Interface3D - ModuleInterface - ERR17a'
+                            
+                            
+                            
+                         case(CarbonateSystemModel)
+                            !write(*,*)'llama a CSystem desde modyinterface porque increment is off' !marta
+                            call UnfoldMatrix(Me%ExternalVar%DWZ, Me%Thickness)
+                            call UnfoldMatrix(Latitude, Me%Latitude1D)           
+                            call UnfoldMatrix(Longitude, Me%Longitude1D)
+                            call GetComputeCurrentTime(Me%ObjTime,                  &
+                                                       Me%ExternalVar%Now,          &
+                                                       STAT = STAT_CALL)                    
+                            if (STAT_CALL /= SUCCESS_) stop 'Modify_Interface3D - ModuleInterface - ERR18' 
+
+                            call ModifyCarbonateSystem(Me%ObjCarbonateSystem, &
+                                      Me%Salinity,                          &
+                                      Me%Temperature,                       &
+                                      Me%Thickness,                         &
+                                      Me%Mass,                              &
+                                      Me%OpenPoints,                        &
+                                      Me%Array,                             & 
+                                      Me%Latitude1D,                        &
+                                      Me%Longitude1D,                       &
+                                      STAT_CALL)                                                 
+                           if (STAT_CALL /= SUCCESS_) stop 'Modify_Interface3D - ModuleInterface - ERR18b'   
                             
                     end select
 
@@ -4179,80 +4179,36 @@ do6 :               do index = ArrayLB, ArrayUB
 
                 Index = 0
 
-                nProperty = PropertyIndexNumber(PropertyID)
+                nProperty = PropertyIndexNumber(PropertyID) 
 
                 if (nProperty < 0) &
                     stop 'Modify_Interface3D - ModuleInterface - ERR80'
 
                 DT = InterfaceDT()
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
                 select case (Me%SinksSourcesModel)
                 
-                    case (BivalveModel)
-                    
-
-
-
+                    case (BivalveModel)                    
 
                         !$OMP PARALLEL PRIVATE(Index, i, j, k)
-
-
-
                         !$OMP DO SCHEDULE(STATIC)
                         do Index = Me%Array%ILB, Me%Array%IUB
-
 
                             i = Me%Index2I(Index)
                             j = Me%Index2J(Index)
                             k = Me%Index2K(Index)
                                 Concentration(i, j, k) = Concentration( i, j, k)      + &
                                                         Me%ConcentrationIncrement(nProperty, Index) * DTProp / DT 
-
-
-
                                                         
                                 if(abs(Concentration(i, j, k)) .le. AlmostZero)then
                                     Concentration(i,j,k) = 0.0
-
-                                end if                       
+                                end if                     
 
                         enddo
                         !$OMP END DO NOWAIT
                         !$OMP END PARALLEL
-
                     
                     case default
-
-
-
-
-
-
-
-
-
-
 
                         !$OMP PARALLEL PRIVATE(Index,i,j,k)
                         !$OMP DO SCHEDULE(STATIC)
@@ -4264,20 +4220,15 @@ do6 :               do index = ArrayLB, ArrayUB
                             if (Me%ExternalVar%OpenPoints3D(i, j, k) == 1) then
                                 Concentration(i, j, k) = Concentration( i, j, k)      + &
                                          Me%ConcentrationIncrement(nProperty, Index) * DTProp / DT 
-
-
                                         
                                 if(abs(Concentration(i, j, k)) .le. AlmostZero)then
                                     Concentration(i,j,k) = 0.0
-
                                 end if
 
                             end if
                         enddo
                         !$OMP END DO NOWAIT
                         !$OMP END PARALLEL
-
-
                 end select
                        
             end if cd5
@@ -4462,7 +4413,8 @@ cd4 :           if (ReadyToCompute) then
                     !Stores the concentration before changing them
                     Me%WaterMassInKgIncrement = Me%MassInKgFromWater
                     endif
-
+                    
+                 
                     select case (Me%SinksSourcesModel)
 
                         case(BenthicCEQUALW2Model)
@@ -4686,7 +4638,7 @@ do6 :               do index = ArrayLB, ArrayUB
                                   SoilDryDensity, Salinity, pH, IonicStrength,       &
                                   PhosphorusAdsortionIndex, WindVelocity,            &
                                   Oxygen1D, WaterVolume, CellArea,                   &
-
+!                                  SinksSourcesModel,                                    & !marta
                                   DTProp, STAT)
 
         !Arguments-------------------------------------------------------------
@@ -4713,6 +4665,7 @@ do6 :               do index = ArrayLB, ArrayUB
         real,    optional,  intent(IN)                  :: DTProp
         real,    optional, dimension(:), pointer        :: MacrOccupation, ShearStress, SPMFlux
         integer, optional,  intent(OUT)                 :: STAT
+        !character(len=StringLength), optional           :: SinksSourcesModel  !marta
 
         !External--------------------------------------------------------------
         real                                            :: DT
@@ -4797,6 +4750,8 @@ cd4 :           if (ReadyToCompute) then
                     !Stores the concentration before changing them
                     Me%ConcentrationIncrement = Me%Mass
 
+                    !Associates External Instances
+                    !Me%SinksSourcesModel            =  SinksSourcesModel   !marta
                     select case (Me%SinksSourcesModel)
 
                         case(WaterQualityModel)
@@ -5017,6 +4972,31 @@ cd4 :           if (ReadyToCompute) then
 
                                               STAT = STAT_CALL)
                             if (STAT_CALL /= SUCCESS_) stop 'Modify_Interface1D - ModuleInterface - ERR10'
+                            
+                            
+                            
+                            
+                         case(CarbonateSystemModel)
+
+                            call UnfoldMatrix(Me%ExternalVar%DWZ1D, Me%Thickness) 
+                                                    
+                            call GetComputeCurrentTime(Me%ObjTime,                  &
+                                                       Me%ExternalVar%Now,          &
+                                                       STAT = STAT_CALL)                    
+                            if (STAT_CALL /= SUCCESS_) stop 'Modify_Interface1D - ModuleInterface - ERR11' 
+
+                           
+                            call ModifyCarbonateSystem(Me%ObjCarbonateSystem,  &
+                                      Me%Salinity,                             &
+                                      Me%Temperature,                          &
+                                      Me%Thickness,                            &
+                                      Me%Mass,                                 &
+                                      Me%OpenPoints,                           &
+                                      Me%Array,                                &
+                                      Me%Latitude1D,                             &
+                                      Me%Longitude1D,                            &
+                                      STAT = STAT_CALL)
+                            if (STAT_CALL /= SUCCESS_) stop 'Modify_Interface1D - ModuleInterface - ERR12'    
                             
                     end select
 
@@ -6072,10 +6052,6 @@ cd45 :                  if (.NOT. Me%AddedProperties(i)) then
                 endif
 
 
-
-
-
-
             
                 if (Ready) Me%AddedProperties = .false.
 
@@ -6140,36 +6116,6 @@ cd45 :                  if (.NOT. Me%AddedProperties(i)) then
                                       STAT                            = STAT_CALL)
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
                 if (STAT_CALL .NE. SUCCESS_)stop 'FillMassTempSalinity3D - ModuleInterface - ERR08' 
 
 !                call GetWWTPQOptions(Me%ObjWWTPQ,                                               &
@@ -6186,18 +6132,6 @@ cd45 :                  if (.NOT. Me%AddedProperties(i)) then
 !                                    Ammonia                         = lAmmonia,                 &
 !                                    Nitrate                         = lNitrate,                  &
 !                                    STAT           = STAT_CALL)
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 !                if (STAT_CALL .NE. SUCCESS_)stop 'FillMassTempSalinity3D - ModuleInterface - ERR09'
@@ -6228,21 +6162,11 @@ cd45 :                  if (.NOT. Me%AddedProperties(i)) then
                      Me%AddedProperties(numHetBio)    = .TRUE.
                   end if 
 
-
-
-
-
-
-
-
-
-
                   if (PropertyID == AutBio_) then
                      call InputData(Concentration,numAutBio)
                      Me%AddedProperties(numAutBio)    = .TRUE.
                   end if 
                   
-
                   if (PropertyID == PartProd_) then
                      call InputData(Concentration,numPartProd)
                      Me%AddedProperties(numPartProd)    = .TRUE.
@@ -6253,85 +6177,12 @@ cd45 :                  if (.NOT. Me%AddedProperties(i)) then
                      Me%AddedProperties(numSolBioOrgNitrogen)    = .TRUE.
                   end if 
 
-
-
-                  
-
-
                   if (PropertyID == PartBioOrgNitrogen_) then
-
-
-
-
-
                      call InputData(Concentration,numPartBioOrgNitrogen)
                      Me%AddedProperties(numPartBioOrgNitrogen )    = .TRUE.
                   end if 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-                  
+                
                   if (PropertyID == Oxygen_) then
-
-
-
-
-
-
                      call InputData(Concentration,numOxygen)
                      Me%AddedProperties(numOxygen)    = .TRUE.
                   end if 
@@ -6340,126 +6191,27 @@ cd45 :                  if (.NOT. Me%AddedProperties(i)) then
                      call InputData(Concentration,numAmmonia)
                      Me%AddedProperties(numAmmonia)    = .TRUE.
                   end if 
-
-                  
+                
                   if (PropertyID == Nitrate_) then
-
-
-
-
-
-
                      call InputData(Concentration,numNitrate)
                      Me%AddedProperties(numNitrate)    = .TRUE.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
                   end if 
                   
                   if (PropertyID == Alkalinity_) then
                      call InputData(Concentration,numAlkalinity)
                      Me%AddedProperties(numAlkalinity)    = .TRUE.
                   end if 
-                  
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+                 
 
               if (PropertyID== Salinity_) then
                   call UnfoldMatrix(Concentration, Me%Salinity)
                   SalinityAdded       =.TRUE.
-
-
-
               end if
 
               if (PropertyID== Temperature_) then
                   call UnfoldMatrix(Concentration, Me%Temperature)
                   TemperatureAdded    =.TRUE.
               end if
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
             if (SalinityAdded .AND. TemperatureAdded) then
@@ -6471,8 +6223,6 @@ cd45 :                  if (.NOT. Me%AddedProperties(i)) then
                          exit
                 end if
                 end do
-
-
 
                 if (Ready) Me%AddedProperties = .FALSE.
             end if       
@@ -6562,11 +6312,44 @@ cd45 :                  if (.NOT. Me%AddedProperties(i)) then
                     end do 
                     if (Ready) Me%AddedProperties = .FALSE.
                 end if
+                
+                
+   case(CarbonateSystemModel)
+                
+                call GetCarbonateSystemPropIndex(Me%ObjCarbonateSystem,PropertyID,IndexNumber,STAT=STAT_CALL)
+                if (STAT_CALL==SUCCESS_) then
+                    call InputData(Concentration, IndexNumber)
+                    Me%AddedProperties(IndexNumber) =.TRUE.
+                else if (STAT_CALL.NE.SUCCESS_ .AND. STAT_CALL.NE.NOT_FOUND_ERR_) then
+                    stop 'FillMassTempSalinity3D - ModuleInterface - ERR13' 
+                end if
+                     
+                if (PropertyID== Salinity_) then
+                    call UnfoldMatrix(Concentration, Me%Salinity)
+                    SalinityAdded       =.TRUE.
+                end if 
 
+                if (PropertyID== Temperature_) then
+                    call UnfoldMatrix(Concentration, Me%Temperature)
+                    TemperatureAdded    =.TRUE.
+                end if 
+
+                if (SalinityAdded .AND. TemperatureAdded) then
+                    Ready = .TRUE.
+
+                    do i = PropLB, PropUB
+                    if (.NOT. Me%AddedProperties(i)) then
+                            Ready = .FALSE.
+                            exit 
+                    end if 
+                    end do 
+                    if (Ready) Me%AddedProperties = .FALSE.
+                end if              
+                
             case default
                 write(*,*) 
                 write(*,*) 'Defined sinks and sources model was not recognised.'
-                stop 'FillMassTempSalinity3D - ModuleInterface - ERR13'
+                stop 'FillMassTempSalinity3D - ModuleInterface - ERR14'
 
      end select
 
@@ -7510,34 +7293,6 @@ cd45 :                  if (.NOT. Me%AddedProperties(i)) then
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
                 if (STAT_CALL .NE. SUCCESS_)stop 'FillMassTempSalinity1D - ModuleInterface - ERR08' 
 !
 !                 call GetWWTPQOptions(Me%ObjWWTPQ,                                           &
@@ -7571,21 +7326,6 @@ cd45 :                  if (.NOT. Me%AddedProperties(i)) then
                   end if 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
                   if (PropertyID == SlowlyBioSub_) then
                      call InputData(Concentration,numSlowlyBioSub)
                      Me%AddedProperties(numSlowlyBioSub)    = .TRUE.
@@ -7598,22 +7338,16 @@ cd45 :                  if (.NOT. Me%AddedProperties(i)) then
                   end if 
 
 
-
- 
-
                   if (PropertyID == AutBio_) then
                      call InputData(Concentration,numAutBio)
                      Me%AddedProperties(numAutBio)    = .TRUE.
                   end if 
 
 
-
-
                   if (PropertyID == PartProd_) then
                      call InputData(Concentration,numPartProd)
                      Me%AddedProperties(numPartProd)    = .TRUE.
                   end if 
-
 
 
                   if (PropertyID == SolBioOrgNitrogen_) then
@@ -7641,238 +7375,44 @@ cd45 :                  if (.NOT. Me%AddedProperties(i)) then
 
 
                   if (PropertyID == Nitrate_) then
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
                      call InputData(Concentration,numNitrate)
                      Me%AddedProperties(numNitrate)    = .TRUE.
                   end if 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+            case(CarbonateSystemModel)
+
+                call GetCarbonateSystemPropIndex(Me%ObjCarbonateSystem,PropertyID,IndexNumber,STAT=STAT_CALL)
+                if (STAT_CALL==SUCCESS_) then
+                    call InputData(Concentration, IndexNumber)
+                    Me%AddedProperties(IndexNumber) =.TRUE.
+                else if (STAT_CALL.NE.SUCCESS_ .AND. STAT_CALL.NE.NOT_FOUND_ERR_) then
+                    stop 'FillMassTempSalinity1D - ModuleInterface - ERR10' 
+                end if
+                     
+                               
+                if (PropertyID== Salinity_) then
+                    call UnfoldMatrix(Concentration, Me%Salinity)
+                    SalinityAdded       =.TRUE.
+                end if 
+
+                if (PropertyID== Temperature_) then
+                   call UnfoldMatrix(Concentration, Me%Temperature)
+                   TemperatureAdded    =.TRUE.
+                end if 
+
+       
+                if (SalinityAdded .AND. TemperatureAdded) then
+                    Ready = .TRUE.
+
+                    do i = PropLB, PropUB
+                    if (.NOT. Me%AddedProperties(i)) then
+                            Ready = .FALSE.
+                            exit 
+                   end if 
+                    end do 
+                    if (Ready) Me%AddedProperties = .FALSE.
+                end if
 
 
             case default
@@ -7899,10 +7439,8 @@ cd45 :                  if (.NOT. Me%AddedProperties(i)) then
         integer                                 :: i, j, k
         integer                                 :: ILB, IUB
         integer                                 :: JLB, JUB
-        integer                                 :: KLB, KUB
-        
+        integer                                 :: KLB, KUB        
         integer                                 :: STAT_CALL
-
         !----------------------------------------------------------------------
 
         ILB = Size3D%ILB
@@ -7946,15 +7484,12 @@ cd45 :                  if (.NOT. Me%AddedProperties(i)) then
         
         !Arguments ------------------------------------------------------------
         type(T_Size2D)                          :: Size2D
-
         !Local-----------------------------------------------------------------
         integer                                 :: Index
         integer                                 :: i, j
         integer                                 :: ILB, IUB
         integer                                 :: JLB, JUB
-
         integer                                 :: STAT_CALL
-
         !----------------------------------------------------------------------
 
         ILB = Size2D%ILB
@@ -8038,141 +7573,46 @@ cd45 :                  if (.NOT. Me%AddedProperties(i)) then
         !Arguments-------------------------------------------------------------
         real, dimension(:,:,:), pointer         :: Concentration
         integer, intent (in)                    :: nProperty 
-
         !Local-----------------------------------------------------------------
         integer                                 :: Index
-
-
-
-
-
-
-
-
-
-
         !----------------------------------------------------------------------
         
         !$OMP PARALLEL PRIVATE(Index)
         !$OMP DO SCHEDULE(STATIC)
         do Index = Me%Array%ILB, Me%Array%IUB
             Me%Mass(nProperty,Index) = Concentration(Me%Index2I(Index),Me%Index2J(Index),Me%Index2K(Index))
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         enddo
         !$OMP END DO NOWAIT
         !$OMP END PARALLEL
-
         
         !----------------------------------------------------------------------
-
     end subroutine InputData3D
-
     !--------------------------------------------------------------------------
-
+    
+    
+    
     subroutine InputData2D (Concentration, nProperty)
 
         !Arguments-------------------------------------------------------------
         real, dimension(:,:), pointer           :: Concentration
         integer, intent (in)                    :: nProperty 
-
         !Local-----------------------------------------------------------------
         integer                                 :: Index
-
-
-
-
-
-
-
-
         !----------------------------------------------------------------------
 
         !$OMP PARALLEL PRIVATE(Index)
         !$OMP DO SCHEDULE(STATIC)
         do Index = Me%Array%ILB, Me%Array%IUB
             Me%Mass(nProperty,Index) = Concentration(Me%Index2I(Index),Me%Index2J(Index))
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         enddo
         !$OMP END DO NOWAIT
         !$OMP END PARALLEL
 
-
     !----------------------------------------------------------------------
-
     end subroutine InputData2D
-
     !--------------------------------------------------------------------------
+    
+    
 
     subroutine InputData1D (Concentration, nProperty)
 
@@ -8183,59 +7623,26 @@ cd45 :                  if (.NOT. Me%AddedProperties(i)) then
         !Local-----------------------------------------------------------------
         integer                                 :: Index
 
-
-
-
-
-
-
         !----------------------------------------------------------------------
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
         !$OMP PARALLEL PRIVATE(Index)
 
         !$OMP DO SCHEDULE(STATIC)
         do Index = Me%Array%ILB, Me%Array%IUB
-
-
             Me%Mass(nProperty,Index) = Concentration(Me%Index2I(Index))
         enddo
         !$OMP END DO NOWAIT
         !$OMP END PARALLEL
-
-
         !----------------------------------------------------------------------
-
     end subroutine InputData1D
-
     !--------------------------------------------------------------------------
+    
+    
 #ifdef _PHREEQC_    
     subroutine GetPointsForUnfoldMatrix3D (Points)
 
-
-
         !Arguments-------------------------------------------------------------
         type(T_Point), dimension(:), pointer   :: Points
-
 
         !Local-----------------------------------------------------------------
         integer                             :: Index
@@ -8246,61 +7653,14 @@ cd45 :                  if (.NOT. Me%AddedProperties(i)) then
         !$OMP DO SCHEDULE(STATIC)
         do Index = Me%Array%ILB, Me%Array%IUB
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
             Points(Index)%I = Me%Index2I(Index)
             Points(Index)%J = Me%Index2J(Index)
             Points(Index)%K = Me%Index2K(Index)
 
-
         enddo
         !$OMP END DO NOWAIT
         !$OMP END PARALLEL
-        
-
-
-        !----------------------------------------------------------------------
+     !----------------------------------------------------------------------
 
     end subroutine GetPointsForUnfoldMatrix3D    
 #endif    
@@ -8338,8 +7698,6 @@ cd45 :                  if (.NOT. Me%AddedProperties(i)) then
 
     !--------------------------------------------------------------------------
 
-
-
     subroutine UnfoldMatrix3D_R8 (Matrix3D, Vector, Factor)
 
         !Arguments-------------------------------------------------------------
@@ -8367,58 +7725,6 @@ cd45 :                  if (.NOT. Me%AddedProperties(i)) then
             !$OMP END DO NOWAIT
         endif
         !$OMP END PARALLEL
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-        
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
         !----------------------------------------------------------------------
 
@@ -8453,67 +7759,8 @@ cd45 :                  if (.NOT. Me%AddedProperties(i)) then
         endif
         !$OMP END PARALLEL
 
+   !----------------------------------------------------------------------
 
-
-
-        
-
-
-
-
-
-        !----------------------------------------------------------------------
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-        
     end subroutine UnfoldMatrix3D_I
 
    !----------------------------------------------------------------------
@@ -8528,47 +7775,6 @@ cd45 :                  if (.NOT. Me%AddedProperties(i)) then
         !Local-----------------------------------------------------------------
         integer                                 :: Index
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         !$OMP PARALLEL PRIVATE(Index)
         if (present(factor)) then
             !$OMP DO SCHEDULE(STATIC)
@@ -8578,26 +7784,14 @@ cd45 :                  if (.NOT. Me%AddedProperties(i)) then
             !$OMP END DO NOWAIT
         else
 
-
-
-
-
-
-
             !$OMP DO SCHEDULE(STATIC)
             do Index =  Me%Array%ILB, Me%Array%IUB
                 Vector(Index) = Matrix2D(Me%Index2I(Index),Me%Index2J(Index))
             enddo
 
-
-
-
-
             !$OMP END DO NOWAIT
         endif
         !$OMP END PARALLEL
-
-
 
     end subroutine UnfoldMatrix2D_R
    !----------------------------------------------------------------------
@@ -8612,47 +7806,6 @@ cd45 :                  if (.NOT. Me%AddedProperties(i)) then
         !Local-----------------------------------------------------------------
         integer                                 :: Index
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         !$OMP PARALLEL PRIVATE(Index)
         if (present(factor)) then
             !$OMP DO SCHEDULE(STATIC)
@@ -8662,27 +7815,15 @@ cd45 :                  if (.NOT. Me%AddedProperties(i)) then
             !$OMP END DO NOWAIT
         else
 
-
-
-
-
-
-
             !$OMP DO SCHEDULE(STATIC)
             do Index =  Me%Array%ILB, Me%Array%IUB
                 Vector(Index) = Matrix2D(Me%Index2I(Index),Me%Index2J(Index))
             enddo
 
-
-
-
-
             !$OMP END DO NOWAIT
         endif
         !$OMP END PARALLEL
 
-
-       
     end subroutine UnfoldMatrix2D_R8
             
     !----------------------------------------------------------------------
@@ -8696,59 +7837,16 @@ cd45 :                  if (.NOT. Me%AddedProperties(i)) then
         !Local-----------------------------------------------------------------
         integer                                 :: Index
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         !$OMP PARALLEL PRIVATE(Index)
 
         !$OMP DO SCHEDULE(STATIC)
         do Index =  Me%Array%ILB, Me%Array%IUB
             Vector(Index) = Matrix2D(Me%Index2I(Index),Me%Index2J(Index))
 
-
-
-
         enddo
         !$OMP END DO NOWAIT
         !$OMP END PARALLEL
-
-
-        
+  
    end subroutine UnfoldMatrix2D_I
 
    !----------------------------------------------------------------------
@@ -8768,50 +7866,9 @@ cd45 :                  if (.NOT. Me%AddedProperties(i)) then
         do Index = Me%Array%ILB, Me%Array%IUB
             Vector(Index) = Matrix1D(Me%Index2I(Index))
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         enddo
         !$OMP END DO NOWAIT
         !$OMP END PARALLEL
-
 
     end subroutine UnfoldMatrix1D_R
         
@@ -8832,46 +7889,9 @@ cd45 :                  if (.NOT. Me%AddedProperties(i)) then
         !$OMP DO SCHEDULE(STATIC)
         do Index = Me%Array%ILB, Me%Array%IUB
             Vector(Index) = Matrix1D(Me%Index2I(Index))
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         enddo
         !$OMP END DO NOWAIT
         !$OMP END PARALLEL
-
 
     end subroutine UnfoldMatrix1D_I
 
@@ -8930,7 +7950,7 @@ cd45 :                  if (.NOT. Me%AddedProperties(i)) then
 
         !Begin----------------------------------------------------------------
         
-
+       
         select case (Me%SinksSourcesModel)
 
             case (WaterQualityModel)
@@ -9462,43 +8482,10 @@ cd1 :           if      (PropertyID== Phytoplankton_       ) then
                                       Alkalinity                      = numAlkalinity,          & 
                               STAT                             = STAT_CALL)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
                 if (STAT_CALL .NE. SUCCESS_) stop 'PropertyIndexNumber - ModuleInterface - ERR24'
                       
                if      (PropertyID== SolInertOrgMat_       ) then
                     nProperty = numSolInertOrgMat
-
-
 
                 else if (PropertyID== ReadilyBioSub_        ) then
                     nProperty = numReadilyBioSub
@@ -9534,12 +8521,6 @@ cd1 :           if      (PropertyID== Phytoplankton_       ) then
 
                 else if (PropertyID== Ammonia_              ) then 
 
-
-
-
-
-
-
                     nProperty = numAmmonia
 
                 else if (PropertyID== SolBioOrgNitrogen_   ) then 
@@ -9549,110 +8530,8 @@ cd1 :           if      (PropertyID== Phytoplankton_       ) then
                 else if (PropertyID== PartBioOrgNitrogen_  ) then 
                     nProperty = numPartBioOrgNitrogen
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
                 else if (PropertyID== Alkalinity_          ) then 
                     nProperty = numAlkalinity
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
                 else
                     write(*,*) 
@@ -9672,15 +8551,28 @@ cd1 :           if      (PropertyID== Phytoplankton_       ) then
 
                 end if  
                 
+        case(CarbonateSystemModel)
+                
+                call GetCarbonateSystemPropIndex(Me%ObjCarbonateSystem,PropertyID,nProperty,STAT_CALL)
+                
+                if (STAT_CALL.NE.SUCCESS_) then 
+                    
+                    write(*,*) 
+                    write(*,*) 'Inconsistency between Interface and Carbonate System Module.'
+                    stop       'PropertyIndexNumber - ModuleInterface - ERR48' 
+
+                end if          
+                
         case default
 
             write(*,*) 
             write(*,*) 'Defined sinks and sources model was not recognised.'
-            stop 'ReadInterfaceFilesName - ModuleInterface - ERR48' 
+            stop 'ReadInterfaceFilesName - ModuleInterface - ERR49' 
 
         end select
 
-        PropertyIndexNumber = nProperty
+        PropertyIndexNumber = nProperty      
+        
 
         !----------------------------------------------------------------------
 
@@ -9748,11 +8640,15 @@ cd1 :           if      (PropertyID== Phytoplankton_       ) then
             case(BivalveModel)
                 call GetDTBivalve(Me%ObjBivalve, DTSecond = InterfaceDT, STAT = STAT_CALL)
                 if (STAT_CALL /= SUCCESS_) stop 'InterfaceDT - ModuleInterface - ERR20' 
+                
+            case(CarbonateSystemModel)
+                call GetDTCarbonateSystem(Me%ObjCarbonateSystem, DT = InterfaceDT, STAT = STAT_CALL)
+                if (STAT_CALL /= SUCCESS_) stop 'InterfaceDT - ModuleInterface - ERR21' 
 
             case default
                 write(*,*) 
                 write(*,*) 'Defined sinks and sources model was not recognised.'
-                stop 'InterfaceDT - ModuleInterface - ERR21'
+                stop 'InterfaceDT - ModuleInterface - ERR22'
 
         end select
                 
@@ -9803,6 +8699,9 @@ cd1 :           if      (PropertyID== Phytoplankton_       ) then
 
             case(BivalveModel)
                  model_name = 'Bivalve'
+                 
+           case(CarbonateSystemModel)
+                 model_name = 'CarbonateSystem'
                  
         end select
         
@@ -9862,6 +8761,12 @@ cd1 :   if (ready_ .NE. OFF_ERR_) then
 
                         call KillLife(Me%ObjLife, STAT = STAT_CALL)
                         if (STAT_CALL .NE. SUCCESS_) stop 'KillInterface - ModuleInterface - ERR30'
+                        
+                    case(CarbonateSystemModel)
+
+                        call KillCarbonateSystem(Me%ObjCarbonateSystem, STAT = STAT_CALL)
+                        if (STAT_CALL .NE. SUCCESS_) stop 'KillInterface - ModuleInterface - ERR35'
+           
 #ifdef _BFM_  
                     case(BFMModel)
 
@@ -10164,10 +9069,6 @@ cd1 :   if (ready_ .NE. OFF_ERR_) then
 
             
     end subroutine DeallocateInstance
-
-
-
-
 
     !++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
     !++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++

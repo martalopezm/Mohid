@@ -269,6 +269,12 @@ Module ModuleGlobalData
     integer, parameter :: Oxygen_                           = 25 
     integer, parameter :: DissolO2PercentSat_               = 26
     integer, parameter :: CO2PartialPressure_               = 27
+    
+    !Carbonate System
+    integer, parameter :: ALK_cs_p_                         = 2700 
+    integer, parameter :: ALK_cs_b_                         = 2701
+    integer, parameter :: DIC_cs_nc_                        = 2702
+    integer, parameter :: DIC_cs_c_                         = 2703
 
     !Bivalve species
     integer, parameter :: Bivalve1_                         = 28
@@ -1138,7 +1144,14 @@ Module ModuleGlobalData
     character(StringLength), private, parameter :: Char_Het_Bacteria_C       = 'heterotrophic bacteria carbon'
     character(StringLength), private, parameter :: Char_Het_Bacteria_N       = 'heterotrophic bacteria nitrogen'
     character(StringLength), private, parameter :: Char_Het_Bacteria_P       = 'heterotrophic bacteria phosphorus'
-!___________________________________________________________________________________________________________________
+    
+!_____ @ carbonate system__________________________________________________________________________________________
+    
+    character(StringLength), private, parameter :: Char_ALK_cs_p              = 'parametrized alkalinity CS'
+    character(StringLength), private, parameter :: Char_ALK_cs_b              = 'biological alkalinity CS'
+    character(StringLength), private, parameter :: Char_DIC_cs_c              = 'dissolved inorganic carbon CS calc'
+    character(StringLength), private, parameter :: Char_DIC_cs_nc             = 'dissolved inorganic carbon CS nocalc'
+!___________________________________________________________________________________________________________________    
 
     !Name of Bivalve
     character(StringLength), private, parameter :: Char_Bivalve1             = 'bivalve1'
@@ -1491,6 +1504,7 @@ Module ModuleGlobalData
     character(StringLength), parameter          :: SeagrassWaterInteractionModel  = 'SeagrassWaterInteraction'
     character(StringLength), parameter          :: SeagrassSedimInteractionModel  = 'SeagrassSedimInteraction'
     character(StringLength), parameter          :: BivalveModel             = 'BivalveModel'
+    character(StringLength), parameter          :: CarbonateSystemModel     = 'CarbonateSystemModel'
 
     !Water air interface
     character(StringLength), private, parameter :: Char_LatentHeat               = 'latent heat'
@@ -1979,6 +1993,8 @@ Module ModuleGlobalData
     integer, parameter ::  mLitter_                 = 96
     integer, parameter ::  mTwoWay_                 = 97
     integer, parameter ::  mOutputGrid_             = 98
+    integer, parameter ::  mCarbonateSystem_        = 99
+
     
     !Domain decomposition
     integer, parameter :: WestSouth        = 1
@@ -2101,8 +2117,10 @@ Module ModuleGlobalData
         T_Module(mSediment_              , "Sediment"           ),   T_Module(mReservoirs_             , "Reservoirs"    ),        &
         T_Module(mIrrigation_            , "Irrigation"         ),   T_Module(mTURBINE_                , "Turbine"       ),        &
         T_Module(mLitter_                , "Litter"             ),   T_Module(mTwoWay_                 , "TwoWay"        ),        &
-        T_Module(mOutputGrid_            , "OuputGrid"          )/)
-        
+        T_Module(mOutputGrid_            , "OuputGrid"          ),   T_Module(mCarbonateSystem_       , "CarbonateSystem"    )/)              
+
+
+
 
     !Variables
     logical, dimension(MaxModules)                                  :: RegisteredModules  = .false.
@@ -2743,8 +2761,13 @@ do2:            do i=1, DynamicPropertiesNumber
             call AddPropList (Mesozooplankton_P_,       Char_Mesozooplankton_P,         ListNumber)               
             call AddPropList (Het_Bacteria_C_,          Char_Het_Bacteria_C,            ListNumber)                 
             call AddPropList (Het_Bacteria_N_,          Char_Het_Bacteria_N,            ListNumber)                 
-            call AddPropList (Het_Bacteria_P_,          Char_Het_Bacteria_P,            ListNumber)                          
-         
+            call AddPropList (Het_Bacteria_P_,          Char_Het_Bacteria_P,            ListNumber)
+            
+            call AddPropList (ALK_cs_p_,                Char_ALK_cs_p,                  ListNumber) !mlopez
+            call AddPropList (ALK_cs_b_,                Char_ALK_cs_b,                  ListNumber) !mlopez
+            call AddPropList (DIC_cs_c_,                Char_DIC_cs_c,                  ListNumber) !mlopez
+            call AddPropList (DIC_cs_nc_,               Char_DIC_cs_nc,                 ListNumber) !mlopez
+            
             call AddPropList (Bivalve1_,                Char_Bivalve1,                  ListNumber) !soffs
             call AddPropList (Bivalve2_,                Char_Bivalve2,                  ListNumber)
             call AddPropList (Bivalve3_,                Char_Bivalve3,                  ListNumber)

@@ -130,6 +130,7 @@
 !   WATER_QUALITY               : 0/1               [0]         !Compute water quality processes
 !   CEQUALW2                    : 0/1               [0]         !Compute CEQUALW2 ecological processes
 !   LIFE                        : 0/1               [0]         !Compute Life ecological processes
+!   CARBSYST                    : 0/1               [0]         !Compute CARBonate SYSTem processes
 !   SURFACE_FLUXES              : 0/1               [0]         !Compute fluxes from water-air interface
 !   BOTTOM_FLUXES               : 0/1               [0]         !Compute fluxes from sediment-water interface
 !   DISCHARGES                  : 0/1               [0]         !Compute discharges (WWTP, river, etc)
@@ -218,7 +219,7 @@ Module ModuleWaterProperties
                                           GetDDecompMPI_ID, GetDDecompON,                       &
                                           WindowIntersectDomain, ReturnsIntersectionCorners,    &
                                           GetGridOutBorderPolygon, GetDDecompWorkSize2D,        &
-                                          GetDDecompMapping2D
+                                          GetDDecompMapping2D, GetGridLatitudeLongitude
 
 #ifdef _USE_MPI
     use ModuleHorizontalGrid,       only: ReceiveSendProperitiesMPI
@@ -367,6 +368,8 @@ Module ModuleWaterProperties
     private ::              SetSpeciesSettlementProbability
     private ::              UpdateLarvaeDistribution
     private ::              ConstructBivalveOutput
+    private ::          CoupleCarbonateSystem
+    private ::              WQrates_for_CS_allocate 
     private ::          CoupleMacroAlgae
     private ::          CoupleSeagrassesLeaves
     private ::          CoupleFreeVerticalMovement
@@ -479,6 +482,8 @@ Module ModuleWaterProperties
     private ::      Surface_Processes
     private ::          ComputeSurfaceHeatFluxes
     private ::      WaterQuality_Processes
+    private ::          WaterQuality_Processes_Rates
+    private ::              WQrates_for_CS
     private ::      CEQUALW2_Processes
     private ::      Life_Processes
     private ::      MacroAlgae_Processes
@@ -502,6 +507,7 @@ Module ModuleWaterProperties
     private ::          BivalveOutput
     private ::              BivalveOutputHDF
     private ::              BivalveOutputBoxTimeSerie
+    private ::      CarbonateSystem_Processes
     private ::      Partition_Processes
     private ::      DataAssimilationProcesses
     private ::      AltimAssimilationProcess
@@ -818,6 +824,7 @@ Module ModuleWaterProperties
         logical                                 :: Life                 = .false.
         logical                                 :: Bivalve              = .false.
         logical                                 :: WWTPQ                = .false.
+        logical                                 :: CarbonateSystem      = .false.
         logical                                 :: PhreeqC              = .false.
         logical                                 :: Partitioning         = .false.
         logical                                 :: FreeVerticalMovement = .false.
@@ -1003,6 +1010,19 @@ Module ModuleWaterProperties
         integer                                 :: CeQualID
     end type T_WQRate
 
+    !Only for use with CarbonateSystemmodule, marta lopez
+    type     T_WQRate_for_CS
+        integer                                 :: Alk_option = 0   
+        real, pointer, dimension(:,:,:)         :: A_Denit    => null() !Denitrification                    (3D)
+        real, pointer, dimension(:,:,:)         :: A_Nitri_1  => null() !Nitrification 1est step            (3D)
+        real, pointer, dimension(:,:,:)         :: A_Nitri_2  => null() !Nitrification 2nd  step            (3D)
+        real, pointer, dimension(:,:,:)         :: A_PP_ammon => null() !Rate of prim.prod based on ammonia (3D)
+        real, pointer, dimension(:,:,:)         :: A_PP_nitra => null() !Rate of prim. prod based on nitrate(3D)
+        real, pointer, dimension(:,:,:)         :: A_aer_mine => null() !Rate of aerobic mineralization     (3D)
+        !real, pointer, dimension(:,:,:)         :: A_CaCo3_dis  => null()
+        !real, pointer, dimension(:,:,:)         :: A_CaCo3_prec => null()
+   end type T_WQRate_for_CS
+  
     type       T_Files
          character(len=Pathlength)              :: InitialWaterProperties
          character(len=Pathlength)              :: FinalWaterProperties
@@ -1033,6 +1053,7 @@ Module ModuleWaterProperties
          type(T_Coupling)                       :: CEQUALW2
          type(T_Coupling)                       :: Life
          type(T_Coupling)                       :: Bivalve
+         type(T_Coupling)                       :: CarbonateSystem
          type(T_Coupling)                       :: WWTPQM
          type(T_Coupling)                       :: PhreeqC
          type(T_Coupling)                       :: Partition
@@ -1145,6 +1166,8 @@ Module ModuleWaterProperties
         integer, pointer, dimension(:,:  )      :: WaterPoints2D
         real,    pointer, dimension(:,:  )      :: ShearStress
         real,    pointer, dimension(:,:  )      :: SPMDepositionFlux
+        real,    pointer, dimension(:,:  )      :: Latitude        
+        real,    pointer, dimension(:,:  )      :: Longitude       
         logical                                 :: Vertical1D           = .false.
         logical                                 :: XZFlow               = .false.
         logical                                 :: Backtracking         = .false.
@@ -1223,6 +1246,7 @@ Module ModuleWaterProperties
         type(T_Property), pointer               :: LastProperty
         type(T_WqRate), pointer                 :: FirstWQrate
         type(T_WqRate), pointer                 :: LastWQrate
+        type(T_WQRate_for_CS)                   :: WQRate_for_CS
         type(T_DischargeTimeSerie), pointer     :: FirstDischargeTimeSerie
         type(T_Age)                             :: Age
         type(T_MacroAlgae)                      :: MacroAlgae
@@ -1339,7 +1363,13 @@ Module ModuleWaterProperties
 
         !Instance of ModuleBivalve
         integer                                 :: ObjBivalve               = 0
-
+        
+        !Instance of ModuleInterfaceCarbonateSystem
+        integer                                 :: ObjInterfaceCarbSyst     = 0
+        
+        !Instance of ModuleCarbonateSystem
+        integer                                 :: ObjCarbonateSystem       = 0
+        
         !Instance of ModuleDischarges
         integer                                 :: ObjDischarges            = 0
 
@@ -4493,6 +4523,7 @@ i1:     if (OutputOk) then
         Me%Coupled%CEQUALW2%NumberOfProperties              = 0
         Me%Coupled%Life%NumberOfProperties                  = 0
         Me%Coupled%Bivalve%NumberOfProperties               = 0
+        Me%Coupled%CarbonateSystem%NumberOfProperties       = 0
         Me%Coupled%WWTPQM%NumberOfProperties                = 0
 #ifdef _PHREEQC_
         Me%Coupled%PhreeqC%NumberOfProperties               = 0
@@ -4562,6 +4593,13 @@ do1 :   do while (associated(PropertyX))
                 Me%Coupled%Bivalve%NumberOfProperties                   = &
                 Me%Coupled%Bivalve%NumberOfProperties                   + 1
                 Me%Coupled%Bivalve%Yes                                  = ON
+            endif
+            
+               if (PropertyX%Evolution%CarbonateSystem) then
+                Me%Coupled%CarbonateSystem%NumberOfProperties           = &
+                Me%Coupled%CarbonateSystem%NumberOfProperties           + 1
+               !marta write(*,*)'propiedadesCS=',Me%Coupled%CarbonateSystem%NumberOfProperties
+                Me%Coupled%CarbonateSystem%Yes                          = ON
             endif
 
             if (PropertyX%Evolution%WWTPQ) then
@@ -4787,21 +4825,21 @@ do1 :   do while (associated(PropertyX))
 
         end if
 
-        if(Me%Coupled%WQM%Yes .and. Me%Coupled%CEQUALW2%Yes)then
+        if((Me%Coupled%WQM%Yes .or. Me%Coupled%CarbonateSystem%Yes) .and. Me%Coupled%CEQUALW2%Yes)then
 
-            write(*,*)'Cannot run Water Quality model and CEQUALW2 model in the same simulation.'
+            write(*,*)'Cannot run Water Quality/CarbonateSystem model and CEQUALW2 model in the same simulation.'
             call CloseAllAndStop ('Construct_Sub_Modules - WaterProperties - ERR20')
         end if
 
-        if(Me%Coupled%Life%Yes .and. (Me%Coupled%WQM%Yes .or. Me%Coupled%CEQUALW2%Yes))then
+        if(Me%Coupled%Life%Yes .and. (Me%Coupled%WQM%Yes .or. Me%Coupled%CEQUALW2%Yes .or. Me%Coupled%CarbonateSystem%Yes))then
 
-            write(*,*)'Cannot run Life and Water Quality/CEQUALW2 model in the same simulation.'
+            write(*,*)'Cannot run Life and Water Quality/CEQUALW2/CarbonateSystem model in the same simulation.'
             call CloseAllAndStop ('Construct_Sub_Modules - WaterProperties - ERR30')
         end if
 
-        if(Me%Coupled%WWTPQM%Yes .and. (Me%Coupled%WQM%Yes .or. Me%Coupled%CEQUALW2%Yes .or. Me%Coupled%Life%Yes))then
+        if(Me%Coupled%WWTPQM%Yes .and. (Me%Coupled%WQM%Yes .or. Me%Coupled%CEQUALW2%Yes .or. Me%Coupled%Life%Yes .or. Me%Coupled%CarbonateSystem%Yes ))then
 
-            write(*,*)'Cannot run WWTPQ model and Water Quality/CEQUALW2/LIFE model in the same simulation.'
+            write(*,*)'Cannot run WWTPQ model and Water Quality/CEQUALW2/LIFE/CarbonateSystem model in the same simulation.'
             call CloseAllAndStop ('Construct_Sub_Modules - WaterProperties - ERR40')
         end if
 
@@ -4818,11 +4856,13 @@ do1 :   do while (associated(PropertyX))
             write(*,*)'Cannot run CEQUALW2 model and Bivalve model in the same simulation, please choose Life or Water Quality.'
             call CloseAllAndStop ('Construct_Sub_Modules - WaterProperties - ERR60')
         end if
+        
+        
 
 
         !Water quality
         if(Me%Coupled%WQM%Yes)then
-
+            
             call CoupleWaterQuality
 
         end if
@@ -4847,7 +4887,15 @@ do1 :   do while (associated(PropertyX))
             call CoupleBivalve
 
         end if
+        
+        !CarbonateSystem        
+        if(Me%Coupled%CarbonateSystem%Yes)then
+                               
+           call CoupleCarbonateSystem
 
+        end if
+        
+        
         !MacroAlgae
         if(Me%Coupled%MacroAlgae%Yes)then
 
@@ -5105,6 +5153,7 @@ do1 :   do while (associated(PropertyX))
                    PropertyX%Evolution%CEQUALW2                      .or. &
                    PropertyX%Evolution%Life                          .or. &
                    !PropertyX%Evolution%Bivalve                       .or. &
+                   PropertyX%Evolution%CarbonateSystem               .or. &
                    PropertyX%Evolution%WWTPQ                         .or. &
                    PropertyX%Evolution%Partitioning                  .or. &
                    PropertyX%Evolution%FreeVerticalMovement          .or. &
@@ -5481,7 +5530,7 @@ do1 :   do while (associated(PropertyX))
 
         Me%Coupled%WQM%DT_Compute  = WaterQualityDT
         Me%Coupled%WQM%NextCompute = Me%ExternalVar%Now
-
+        !write(*,*) 'wqpropertylist = ',WaterQualityPropertyList
         deallocate(WaterQualityPropertyList)
         nullify   (WaterQualityPropertyList)
 
@@ -6313,8 +6362,145 @@ cd12 :       if (BlockFound) then
 
 
 
-    end subroutine CoupleSeagrassesLeaves
+     end subroutine CoupleSeagrassesLeaves
+      
+     !>@author Marta López, Maretec
+     !>@Brief: Carbonate System module construction called once per simulation)
+     !> Allocates CSpropertyList, sends activated properties(read on
+     !> waterproperties.dat and stores as 
+     !> Me%Coupled%CarbonateSystem%NumberOfProperties) 
+     !>@param[in]    
+     !--------------------------------------------------------------------------
+    subroutine CoupleCarbonateSystem
+        !Local-----------------------------------------------------------------
+        type(T_Property), pointer                           :: PropertyX
+        integer, pointer, dimension(:)                      :: CarbonateSystemPropertyList
+        integer                                             :: STAT_CALL
+        real                                                :: CarbonateSystemDT
+        integer                                             :: CarbonateSystemID = 0
+        integer                                             :: Index = 0
+        !----------------------------------------------------------------------
+        Index = 0        
+        nullify (CarbonateSystemPropertyList)
+        allocate(CarbonateSystemPropertyList(1:Me%Coupled%CarbonateSystem%NumberOfProperties))
+      !marta:tipo de verificacion de modulo interfacsedwater interesante para hacer diferente en algun momento para recordar que propiedades
+      ! el usuario tiene que activar para que funcione, por ejemplo la alk biologica , tipo ammonia tiene que stra activado     
+        !call Search_Property(Temperature, PropertyXID = Temperature_, STAT = STAT_CALL)                                  
+        !if (STAT_CALL /= SUCCESS_) then
+           ! write(*,*)'Please define at leproperty temperature in the'
+          !  write(*,*)'InterfaceSedimentWater data file.'
+          !  stop 'CoupleBenthos - ModuleInterfaceSedimentWater - ERR00' 
+        !end if
+        
+        PropertyX => Me%FirstProperty
+        
+        do while(associated(PropertyX))            
+            if(PropertyX%Evolution%CarbonateSystem)then
+                Index = Index + 1
+                CarbonateSystemPropertyList(Index)  = PropertyX%ID%IDNumber
+            end if
+            
+         !If the user defines to calculate alkalinity through parametrization
+         !this property can not have advection diffusion            
+            if(PropertyX%ID%Name .eq. 'parametrized alkalinity CS') then
+                if(PropertyX%Evolution%AdvectionDiffusion) then
+                    write(*,*)
+                    write(*,*)'If alkalinity is calculated through parametrization option' 
+                    write(*,*)'it can not have ADVECTION_DIFFUSION'
+                    write(*,*)'ADVECTION_DIFFUSION will be switched off'
+                    PropertyX%Evolution%AdvectionDiffusion = OFF
+                endif
+                
+         !If alkalinity is calculated by biological changes, Alk_option equal to 1  
+         !for subroutine WaterQuality_Processes_Rates be able to distinguish, and allocate 
+         !rates arrays for CSmodule      
+            elseif(PropertyX%ID%Name .eq. 'biological alkalinity CS') then 
+                Me%WQRate_for_CS%Alk_option = 1
+                call WQrates_for_CS_allocate 
+            endif    
+            
+            PropertyX => PropertyX%Next
+        enddo       
+        
+        nullify(PropertyX)
+               
+        call ConstructInterface(InterfaceID         = Me%ObjInterfaceCarbSyst,       & !marta
+                                TimeID              = Me%ObjTime,                    &
+                                SinksSourcesModel   = CarbonateSystemModel,          &
+                                DT                  = CarbonateSystemDT,             &
+                                PropertiesList      = CarbonateSystemPropertyList,   &
+                                WaterPoints3D       = Me%ExternalVar%WaterPoints3D,  &
+                                Size3D              = Me%WorkSize,                   &
+                                Vertical1D          = Me%ExternalVar%Vertical1D,     &
+                                CarbonateSystemID   = CarbonateSystemID,             & !marta
+                                STAT = STAT_CALL)
+        if (STAT_CALL /= SUCCESS_)                                                   &
+            call CloseAllAndStop ('CoupleCarbonateSystem- ModuleWaterProperties - ERR01')
 
+        Me%ObjCarbonateSystem = AssociateInstance (mCarbonateSystem_, CarbonateSystemID) !marta
+        Me%Coupled%CarbonateSystem%DT_Compute   = CarbonateSystemDT
+        Me%Coupled%CarbonateSystem%NextCompute  = Me%ExternalVar%Now
+        
+        
+        deallocate(CarbonateSystemPropertyList)
+        nullify   (CarbonateSystemPropertyList)
+
+    !--------------------------------------------------------------------------
+    end subroutine CoupleCarbonateSystem
+    !--------------------------------------------------------------------------
+  
+    !>@author: Marta López, Maretec
+    !>@Brief: Allocates and initializates biogeochem rate arrays for carbsyst module    !--------------------------------------------------------------------------
+     subroutine WQrates_for_CS_allocate 
+     !External------------------------------------------------------------------     
+     integer                                 :: ILB, IUB, JLB, JUB, KLB, KUB
+     integer                                 :: STAT_CALL
+     !Begin-----------------------------------------------------------------
+        ILB = Me%Size%ILB
+        IUB = Me%Size%IUB
+        JLB = Me%Size%JLB
+        JUB = Me%Size%JUB
+        KLB = Me%Size%KLB
+        KUB = Me%Size%KUB             
+    
+        allocate(Me%WQRate_for_CS%A_Denit(ILB:IUB, JLB:JUB, KLB:KUB), STAT = STAT_CALL)
+        if (STAT_CALL /= SUCCESS_) call CloseAllAndStop ('WQrates_for_CS-ModuleWaterProperties-ERR01')
+        Me%WQRate_for_CS%A_Denit(:,:,:) = 0.0
+
+        allocate(Me%WQRate_for_CS%A_Nitri_1(ILB:IUB, JLB:JUB, KLB:KUB), STAT = STAT_CALL)
+        if (STAT_CALL /= SUCCESS_) call CloseAllAndStop ('WQrates_for_CS-ModuleWaterProperties-ERR02')
+        Me%WQRate_for_CS%A_Nitri_1(:,:,:) = 0.0
+        
+        allocate(Me%WQRate_for_CS%A_Nitri_2(ILB:IUB, JLB:JUB, KLB:KUB), STAT = STAT_CALL)
+        if (STAT_CALL /= SUCCESS_) call CloseAllAndStop ('WQrates_for_CS-ModuleWaterProperties-ERR02')
+        Me%WQRate_for_CS%A_Nitri_2(:,:,:) = 0.0
+        
+        allocate(Me%WQRate_for_CS%A_PP_ammon(ILB:IUB, JLB:JUB, KLB:KUB), STAT = STAT_CALL)
+        if (STAT_CALL /= SUCCESS_) call CloseAllAndStop ('WQrates_for_CS-ModuleWaterProperties-ERR03')
+        Me%WQRate_for_CS%A_PP_ammon(:,:,:) = 0.0
+        
+        allocate(Me%WQRate_for_CS%A_PP_nitra(ILB:IUB, JLB:JUB, KLB:KUB), STAT = STAT_CALL)
+        if (STAT_CALL /= SUCCESS_) call CloseAllAndStop ('WQrates_for_CS-ModuleWaterProperties-ERR04')
+        Me%WQRate_for_CS%A_PP_nitra(:,:,:) = 0.0
+
+        allocate(Me%WQRate_for_CS%A_aer_mine(ILB:IUB, JLB:JUB, KLB:KUB), STAT = STAT_CALL)
+        if (STAT_CALL /= SUCCESS_) call CloseAllAndStop ('WQrates_for_CS-ModuleWaterProperties-ERR05')
+        Me%WQRate_for_CS%A_aer_mine(:,:,:) = 0.0
+        
+        !allocate(Me%WQRate_for_CS%A_CaCo3_dis(ILB:IUB, JLB:JUB, KLB:KUB), STAT = STAT_CALL)
+        !if (STAT_CALL /= SUCCESS_) call CloseAllAndStop ('WQrates_for_CS-ModuleWaterProperties-ERR06')
+        !Me%WQRate_for_CS%A_CaCo3_dis(:,:,:) = FillValueReal
+        
+        !allocate(Me%WQRate_for_CS%A_CaCo3_prec(ILB:IUB, JLB:JUB, KLB:KUB), STAT = STAT_CALL)
+        !if (STAT_CALL /= SUCCESS_) call CloseAllAndStop ('WQrates_for_CS-ModuleWaterProperties-ERR07')
+        !Me%WQRate_for_CS%A_CaCo3_prec(:,:,:) = FillValueReal
+    !-------------------------------------------------------------------------- 
+     end subroutine WQrates_for_CS_allocate
+    !-------------------------------------------------------------------------- 
+     
+     
+     
+     
 !------------------------------------------------------------------------------
 
     subroutine CoupleWWTPQ
@@ -6924,6 +7110,7 @@ cd1 :   if      (STAT_CALL .EQ. FILE_NOT_FOUND_ERR_   ) then
             NewProperty%Evolution%CEQUALW2              .or.                            &
             NewProperty%Evolution%Life                  .or.                            &
             NewProperty%Evolution%Bivalve               .or.                            &
+            NewProperty%Evolution%CarbonateSystem       .or.                            &
             NewProperty%Evolution%WWTPQ                 .or.                            &
             NewProperty%Evolution%Partitioning          .or.                            &
             NewProperty%Evolution%FreeVerticalMovement  .or.                            &
@@ -7128,7 +7315,9 @@ cd1 :   if      (STAT_CALL .EQ. FILE_NOT_FOUND_ERR_   ) then
                 NewWqRate%FirstProp%IDnumber = PropNumber
             else
                 write(*,*)
-                write(*,*) 'The first property name is not recognised by the model.'
+                write(*,*) 'The first property name (FIRSTPROP keyword in WaterProperties.dat)'
+                write(*,*) trim (NewWqRate%FirstProp%name) !marta
+                write(*,*) 'in the <beginwqrate><endwqrate> block is not recognised by the model.'
                 call CloseAllAndStop ('Construct_WqRateID - ModuleWaterProperties - ERR03')
             end if
         else
@@ -8232,8 +8421,32 @@ case1 : select case(PropertyID)
 
         if(NewProperty%evolution%Bivalve) NewProperty%evolution%Variable = .true.
 
-
-
+ !<BeginKeyword>
+            !Keyword          : CARBSYST
+            !<BeginDescription>
+               ! This property has Carbonate System model as a sink and source
+            !<EndDescription>
+            !Type             : Logical
+            !Default          : FALSE
+            !File keyword     : CARBSYST
+            !Multiple Options : NO, CARBSYST
+            !Search Type      : FromBlock
+            !Begin Block      : <beginproperty>
+            !End Block        : <endproperty>
+        !<EndKeyword>
+        call GetData(NewProperty%Evolution%CarbonateSystem,                              &
+                     Me%ObjEnterData, iflag,                                             &
+                     SearchType   = FromBlock,                                           &
+                     keyword      = 'CARBSYST',                                          &
+                     Default      = OFF,                                                 &
+                     ClientModule = 'ModuleWaterProperties',                             &
+                     STAT         = STAT_CALL)
+        if (STAT_CALL .NE. SUCCESS_)                                                     &
+            call CloseAllAndStop ('Subroutine Construct_PropertyEvolution - ModuleWaterProperties - ERR71b')
+        ! marta: tengo que poner algo para avisar qué propiedades de WQ tienen que estar activadas al menos
+        ! marta write (*,*) 'carbsyst = ', NewProperty%evolution%Carbonatesystem
+        if(NewProperty%Evolution%CarbonateSystem) NewProperty%Evolution%Variable = .true.
+            
         !<BeginKeyword>
             !Keyword          : WWTPQ
             !<BeginDescription>
@@ -11664,6 +11877,7 @@ cd2 :       if (BlockFound) then
             write(*, *)"---Seagrasses       : ", CurrentProperty%Evolution%SeagrassesLeaves
             write(*, *)"---WWTPQ            : ", CurrentProperty%Evolution%WWTPQ
             write(*, *)"---Bivalve          : ", CurrentProperty%Evolution%Bivalve
+            write(*, *)"---CarbonateSystem  : ", CurrentProperty%Evolution%CarbonateSystem
             write(*, *)"---Partitioning     : ", CurrentProperty%Evolution%Partitioning
             write(*, *)"---Free Vert. Mov   : ", CurrentProperty%Evolution%FreeVerticalMovement
             write(*, *)"---Adv. Diff.       : ", CurrentProperty%Evolution%AdvectionDiffusion
@@ -12412,7 +12626,8 @@ cd1 :   if (ready_ .EQ. IDLE_ERR_) then
             if (Me%Coupled%MinimumConcentration%Yes .or.      &
                 Me%Coupled%MaximumConcentration%Yes)          &
                 call SetLimitsConcentration(PhysicalProcesses = .false.) !('Surface Processes')
-
+            
+            write (*,*) 'wqmodifier = ', Me%Coupled%WQM%Yes !marta
             if (Me%Coupled%WQM%Yes)                           &
                 call WaterQuality_Processes
             
@@ -12430,6 +12645,10 @@ cd1 :   if (ready_ .EQ. IDLE_ERR_) then
 
             if (Me%Coupled%WWTPQM%Yes)                        &
                 call WWTPQ_Processes
+            
+            write (*,*) 'carbsyst = ', Me%Coupled%CarbonateSystem%Yes !marta
+            if (Me%Coupled%CarbonateSystem%Yes)               &
+                call CarbonateSystem_Processes
 
 #ifdef _PHREEQC_
             if (Me%Coupled%PhreeqC%Yes .and. .not. Me%PhreeqCOnlyForStart)                       &
@@ -15268,63 +15487,50 @@ cd5:                if (TotalVolume > 0.) then
     !   model
     !--------------------------------------------------------------------------
     subroutine WaterQuality_Processes
-
+    
         !External--------------------------------------------------------------
         integer                                 :: STAT_CALL
-
         !Local-----------------------------------------------------------------
         type (T_Property),      pointer         :: PropertyX
-        type (T_WqRate),        pointer         :: WqRateX
         real, dimension(:,:,:), pointer         :: ShortWaveExtinctionField
         real, dimension(:,:,:), pointer         :: ShortWaveTop
-
         !Begin-----------------------------------------------------------------
 
         if (MonitorPerformance) call StartWatch ("ModuleWaterProperties", "WaterQuality_Processes")
-
         ShortWaveTop => Me%SolarRadiation%ShortWaveTop
-
         call GetShortWaveExtinctionField(Me%ObjLightExtinction, ShortWaveExtinctionField, STAT = STAT_CALL)
         if (STAT_CALL /= SUCCESS_) call CloseAllAndStop ('WaterQuality_Processes - ModuleWaterProperties - ERR01')
 
         PropertyX => Me%FirstProperty
 
-        if (Me%ExternalVar%Now .GE. Me%Coupled%WQM%NextCompute) then
-
+        if (Me%ExternalVar%Now .GE. Me%Coupled%WQM%NextCompute) then      
             do while(associated(PropertyX))
-                
-                PropertyX%Evolution%SetLimitsTrigger = .true.
-
+                !write(*,*)'wqprocesses-propertyxidname:',PropertyX%ID%NAME !marta
+                PropertyX%Evolution%SetLimitsTrigger = .true.                              
                 call Modify_Interface(InterfaceID       = Me%ObjInterface,              &
                                       PropertyID        = PropertyX%ID%IDNumber,        &
                                       Concentration     = PropertyX%Concentration,      &
                                       WaterPoints3D     = Me%ExternalVar%WaterPoints3D, &
                                       OpenPoints3D      = Me%ExternalVar%OpenPoints3D,  &
-                                      ShortWaveTop= ShortWaveTop,           &
+                                      ShortWaveTop      = ShortWaveTop,                 &
                                       LightExtCoefField = ShortWaveExtinctionField,     &
                                       DWZ               = Me%ExternalVar%DWZ,           &
                                       STAT              = STAT_CALL)
-                if (STAT_CALL .NE. SUCCESS_)                                            &
-                    call CloseAllAndStop ('WaterQuality_Processes - ModuleWaterProperties - ERR02')
-
+                    if (STAT_CALL .NE. SUCCESS_)                                            &
+                    call CloseAllAndStop ('WaterQuality_Processes - ModuleWaterProperties - ERR02')             
                 PropertyX => PropertyX%Next
-
             end do
-
             Me%Coupled%WQM%NextCompute = Me%Coupled%WQM%NextCompute + Me%Coupled%WQM%DT_Compute
-
         end if
 
         PropertyX => Me%FirstProperty
-
+       
         do while (associated(PropertyX))
-
+            !write(*,*)'2wqprocesses-propertyxidname:',PropertyX%ID%NAME !marta
+            !write(*,*)'propXevolutionWQ:',PropertyX%Evolution%WaterQuality !marta
             if (PropertyX%Evolution%WaterQuality) then
-
-                if (Me%ExternalVar%Now .GE.PropertyX%Evolution%NextCompute) then
-                    
+                if (Me%ExternalVar%Now .GE.PropertyX%Evolution%NextCompute) then                    
                    PropertyX%Evolution%SetLimitsTrigger = .true.
-
                    call Modify_Interface(InterfaceID   = Me%ObjInterface,               &
                                          PropertyID    = PropertyX%ID%IDNumber,         &
                                          Concentration = PropertyX%Concentration,       &
@@ -15335,48 +15541,13 @@ cd5:                if (TotalVolume > 0.) then
                     if (STAT_CALL .NE. SUCCESS_)                                        &
                         call CloseAllAndStop ('WaterQuality_Processes - ModuleWaterProperties - ERR03')
                 endif
-
             endif
-
-            PropertyX=>PropertyX%Next
-
+                  PropertyX=>PropertyX%Next      
         enddo
 
         nullify(PropertyX)
 
-        !Get rate fluxes, integrate them and write box time series
-        WqRateX => Me%FirstWqRate
-
-        do while (associated(WqRateX))
-
-            if(WqRateX%Model == WaterQualityModel)then
-
-                call GetRateFlux(InterfaceID    = Me%ObjInterface,                          &
-                                 FirstProp      = WqRateX%FirstProp%IDNumber,               &
-                                 SecondProp     = WqRateX%SecondProp%IDNumber,              &
-                                 RateFlux3D     = WqRateX%Field,                            &
-                                 WaterPoints3D  = Me%ExternalVar%OpenPoints3D,             &
-                                 STAT           = STAT_CALL)
-                if (STAT_CALL .NE. SUCCESS_)                                                &
-                    call CloseAllAndStop ('WaterQuality_Processes - ModuleWaterProperties - ERR04')
-
-                where (Me%ExternalVar%OpenPoints3D == WaterPoint) &
-                        WqRateX%Field = WqRateX%Field * Me%ExternalVar%VolumeZ / Me%Coupled%WQM%DT_Compute
-
-                call BoxDif(Me%ObjBoxDif,                                                   &
-                            WqRateX%Field,                                                  &
-                            trim(WqRateX%ID%Name),                                          &
-                            Me%ExternalVar%OpenPoints3D,                                   &
-                            STAT  = STAT_CALL)
-                if (STAT_CALL .NE. SUCCESS_)                                                &
-                    call CloseAllAndStop ('WaterQuality_Processes - ModuleWaterProperties - ERR05')
-            end if
-
-            WqRateX=>WqRateX%Next
-
-        enddo
-
-        nullify(WqRateX)
+        call WaterQuality_Processes_Rates
 
         call UnGetLightExtinction(Me%ObjLightExtinction, ShortWaveExtinctionField, STAT = STAT_CALL)
         if (STAT_CALL /= SUCCESS_) call CloseAllAndStop ('WaterQuality_Processes - ModuleWaterProperties - ERR06')
@@ -15387,7 +15558,118 @@ cd5:                if (TotalVolume > 0.) then
     end subroutine WaterQuality_Processes
 
     !--------------------------------------------------------------------------
+    !>@author: modified by Marta López, Maretec
+    !>@Brief:
+    !>Get rate flux  after WQ calculations, if activated in the wq.dat file.
+    !>Integrate them and write box time series. In case of CSmodule activated, 
+    !>send them without writting box time series, in case of boxes are not activated.
+    !>@param[in]  
+    !--------------------------------------------------------------------------
+     subroutine WaterQuality_Processes_Rates
+    !External------------------------------------------------------------------
+     integer                                 :: STAT_CALL
+        !Local-----------------------------------------------------------------
+        type (T_WqRate),        pointer         :: WqRateX
+    !Begin---------------------------------------------------------------------
+    
+        WqRateX => Me%FirstWqRate
 
+        do while (associated(WqRateX))
+
+           if(WqRateX%Model == WaterQualityModel) then
+              !Link with WQPropRateFlux subroutine in WQ module through interface
+              call GetRateFlux(InterfaceID      = Me%ObjInterface,                        &
+                                 FirstProp      = WqRateX%FirstProp%IDNumber,             &
+                                 SecondProp     = WqRateX%SecondProp%IDNumber,            &
+                                 RateFlux3D     = WqRateX%Field,                          &
+                                 WaterPoints3D  = Me%ExternalVar%OpenPoints3D,            &
+                                  STAT           = STAT_CALL)
+              if (STAT_CALL .NE. SUCCESS_)                                                &
+              call CloseAllAndStop ('WaterQuality_Processes - ModuleWaterProperties - ERR04')
+              
+              !If the grid point has water, convert the "rate" (mg/l) into a mass rate (mg/seconds)
+              !WQM%DT_Compute is DTSecond of WaterQuality:time step, in seconds, between 2 WaterQuality calls
+              where (Me%ExternalVar%OpenPoints3D == WaterPoint) &
+                    WqRateX%Field = WqRateX%Field * Me%ExternalVar%VolumeZ / Me%Coupled%WQM%DT_Compute
+          
+              !If CSmodule is activated with biological alkalinity, store the needed rates for it
+ i1:          if ((Me%ObjInterfaceCarbSyst == 2) .and. (Me%WQRate_for_CS%Alk_option == 1)) then 
+                 call WQrates_for_CS (WqRateX%Field,WqRateX%FirstProp%Name,WqRateX%SecondProp%Name)                  
+     i2:         if (Me%ObjBoxDif == 1) then !Also write rates in a box time serie if BOX_TIME_SERIE is activated
+                      call BoxDif(Me%ObjBoxDif,                                           &
+                             WqRateX%Field,                                                 &
+                             trim(WqRateX%ID%Name),                                         &
+                             Me%ExternalVar%OpenPoints3D,                                   &
+                             STAT  = STAT_CALL)
+                 if (STAT_CALL .NE. SUCCESS_)                                               &
+                 call CloseAllAndStop ('WaterQuality_Processes - ModuleWaterProperties - ERR05')
+                 end if i2  
+             !If CS is not activated, write rates in a box time serie anyway
+              else 
+                 call BoxDif(Me%ObjBoxDif,                                                  &
+                             WqRateX%Field,                                                 &
+                             trim(WqRateX%ID%Name),                                         &
+                             Me%ExternalVar%OpenPoints3D,                                   &
+                             STAT  = STAT_CALL)
+                 if (STAT_CALL .NE. SUCCESS_)                                               &
+                 call CloseAllAndStop ('WaterQuality_Processes - ModuleWaterProperties - ERR06')
+              end if i1   
+              
+           end if
+           
+            WqRateX=>WqRateX%Next            
+        enddo
+        nullify(WqRateX)
+    !--------------------------------------------------------------------------
+     end subroutine WaterQuality_Processes_Rates
+    !--------------------------------------------------------------------------
+    
+     
+    !--------------------------------------------------------------------------
+    !>@author: Marta López, Maretec
+    !>@Brief: Stores some biogeochemical rates of WQmodule, in every time step,
+    !>@ to be used by CarbonateSystem module
+    !>@param[in]  
+    !--------------------------------------------------------------------------
+     subroutine WQrates_for_CS (Field_local, First_property, Second_property)
+     !External------------------------------------------------------------------     
+     real, pointer, dimension(:,:,:)         :: Field_local
+     character(LEN = StringLength)           :: First_property, Second_property
+     !Begin-----------------------------------------------------------------
+     
+      !Denitrification     
+      if ((First_property .eq. 'nitrate') .and. (Second_property .eq. 'nitrate')) then        
+        Me%WQRate_for_CS%A_Denit(:,:,:) = Field_local
+      !Nitrification step 1 : amount of ammonia (mg) retired during first nitrification step
+      elseif ((First_property .eq. 'ammonia') .and. (Second_property .eq. 'ammonia')) then         
+        Me%WQRate_for_CS%A_Nitri_1(:,:,:) = Field_local
+      !Nitrification step 2  
+      elseif ((First_property .eq. '') .and. (Second_property .eq. '')) then         
+        Me%WQRate_for_CS%A_Nitri_2(:,:,:) = Field_local 
+      !Primary production based on ammonia
+      elseif (First_property .eq. 'grossprod') then!.and. (Second_property .eq. '')) then        
+        Me%WQRate_for_CS%A_PP_ammon(:,:,:) = Field_local
+      !Primary production based on nitrate
+      !elseif (First_property .eq. 'grossprod') then!.and. (Second_property .eq. '')) then        
+        !Me%WQRate_for_CS%A_PP_nitra(:,:,:) = Field_local
+      !Aerobic mineralization
+      elseif((First_property .eq. '') .and. (Second_property .eq. '')) then        
+        Me%WQRate_for_CS%A_aer_mine(:,:,:) = Field_local
+      !CaCO3 dissolution    
+      !elseif((First_property .eq. '') .and. (Second_property .eq. '')) then        
+      !  Me%WQRate_for_CS%A_CaCo3_dis (:,:,:) = Field_local
+      !CaCO3 precipitation    
+      !elseif((First_property .eq. '') .and. (Second_property .eq. '')) then        
+      !  Me%WQRate_for_CS%A_CaCo3_prec(:,:,:) = Field_local       
+     
+      endif      
+      !write(*,*)'tasa es=', Me%WQRate_for_CS%A_Denit(5,2,3)!MARTA
+      !write(*,*)'tasa es=', Me%WQRate_for_CS%A_PP_ammon(:,1,1)!MARTA
+    !-------------------------------------------------------------------------- 
+     end subroutine WQrates_for_CS 
+    !-------------------------------------------------------------------------- 
+     
+     
     subroutine CEQUALW2_Processes
 
         !External--------------------------------------------------------------
@@ -15596,6 +15878,68 @@ cd5:                if (TotalVolume > 0.) then
     end subroutine Life_Processes
 
     !--------------------------------------------------------------------------
+        
+    !--------------------------------------------------------------------------
+    !>@author: Marta López, Maretec
+    !>@Brief: Makes the connection between WaterProperties and CarbonateSystem
+    !>through module Interface. 
+    !>@param[in]  
+    !--------------------------------------------------------------------------
+    subroutine CarbonateSystem_Processes
+
+        !External--------------------------------------------------------------
+        integer                                 :: STAT_CALL
+        !Local-----------------------------------------------------------------
+        type (T_Property),      pointer         :: PropertyX        
+        !Begin-----------------------------------------------------------------
+        if (MonitorPerformance) call StartWatch ("ModuleWaterProperties", "CarbonateSystem_Processes")  
+        
+        !First call. Prepares variables for calculations; converts 3D arrays into 1D vectors              
+        PropertyX => Me%FirstProperty
+        if (Me%ExternalVar%Now .GE. Me%Coupled%CarbonateSystem%NextCompute) then
+            do while(associated(PropertyX))                
+                PropertyX%Evolution%SetLimitsTrigger = .true.                
+                call Modify_Interface(InterfaceID       = Me%ObjInterfaceCarbSyst,      &   !marta
+                                      PropertyID        = PropertyX%ID%IDNumber,        &
+                                      Concentration     = PropertyX%Concentration,      &
+                                      WaterPoints3D     = Me%ExternalVar%WaterPoints3D, &
+                                      OpenPoints3D      = Me%ExternalVar%OpenPoints3D,  &                                      
+                                      DWZ               = Me%ExternalVar%DWZ,           &
+                                      Latitude          = Me%ExternalVar%Latitude,      &
+                                      Longitude         = Me%ExternalVar%Longitude,     &                                      
+                                      STAT              = STAT_CALL)                
+                if (STAT_CALL .NE. SUCCESS_)                                            &
+                    call CloseAllAndStop ('CarbonateSystem_Processes - ModuleWaterProperties - ERR01')
+                PropertyX => PropertyX%Next
+            end do
+            Me%Coupled%CarbonateSystem%NextCompute = Me%Coupled%CarbonateSystem%NextCompute + Me%Coupled%CarbonateSystem%DT_Compute
+        end if
+        !Second call. Performs the calculations
+        PropertyX => Me%FirstProperty
+        do while (associated(PropertyX))
+            if (PropertyX%Evolution%CarbonateSystem) then
+                if (Me%ExternalVar%Now .GE.PropertyX%Evolution%NextCompute) then
+                   call Modify_Interface(InterfaceID   = Me%ObjInterfaceCarbSyst,      &
+                                         PropertyID    = PropertyX%ID%IDNumber,         &
+                                         Concentration = PropertyX%Concentration,       &
+                                         DTProp        = PropertyX%Evolution%DTInterval,&
+                                         WaterPoints3D = Me%ExternalVar%WaterPoints3D,  &
+                                         OpenPoints3D  = Me%ExternalVar%OpenPoints3D,   &
+                                         STAT           = STAT_CALL)
+                    if (STAT_CALL .NE. SUCCESS_)                                        &
+                        call CloseAllAndStop ('CarbonateSystem_Processes - ModuleWaterProperties - ERR02')
+                endif
+            endif
+            PropertyX=>PropertyX%Next
+        enddo
+
+        nullify(PropertyX)      
+
+        if (MonitorPerformance) call StopWatch ("ModuleWaterProperties", "CarbonateSystem_Processes")
+    
+    end subroutine CarbonateSystem_Processes
+    !--------------------------------------------------------------------------
+    
 
     subroutine MacroAlgae_Processes
 
@@ -24850,6 +25194,7 @@ cd1 :   if ((ready_ .EQ. IDLE_ERR_     ) .OR.                                 &
                        (PropertyX%Evolution%Life        )       .or. &
                        (PropertyX%Evolution%MacroAlgae  )       .or. &
                        (PropertyX%Evolution%WWTPQ       )       .or. &
+                       !(PropertyX%Evolution%CarbonateSystem)    .or. &
                        (PropertyX%Evolution%SeagrassesLeaves )) WQMYes = .true.
 
                 end if
@@ -25489,7 +25834,7 @@ cd1 :   if ((ready_ .EQ. IDLE_ERR_     ) .OR.                                 &
                                 YY_IE = Me%ExternalVar%YY_IE,                           &
                                 STAT = STAT_CALL)
         if (STAT_CALL /= SUCCESS_) call CloseAllAndStop ('ReadLockExternalVar - ModuleWaterProperties - ERR04')
-
+        
         !BoundaryPoints2D
         call GetBoundaries(Me%ObjHorizontalMap, Me%ExternalVar%BoundaryPoints2D, STAT = STAT_CALL)
         if (STAT_CALL /= SUCCESS_) call CloseAllAndStop ('ReadLockExternalVar - ModuleWaterProperties - ERR05')
@@ -25527,7 +25872,14 @@ cd1 :   if ((ready_ .EQ. IDLE_ERR_     ) .OR.                                 &
         !WaterPoints2D
         call GetWaterPoints2D(Me%ObjHorizontalMap, Me%ExternalVar%WaterPoints2D, STAT = STAT_CALL)
         if (STAT_CALL /= SUCCESS_) call CloseAllAndStop ('ReadLockExternalVar - ModuleWaterProperties - ERR15')
-
+        
+        !Geographic coordenates in decimal format @marta 
+        call GetGridLatitudeLongitude(Me%ObjHorizontalGrid,                     &
+                                      GridLatitude  = Me%ExternalVar%Latitude,  &
+                                      GridLongitude = Me%ExternalVar%Longitude, &
+                                      STAT = STAT_CALL) 
+        if (STAT_CALL /= SUCCESS_) call CloseAllAndStop ('ReadLockExternalVar - ModuleWaterProperties - ERR16')
+         !write(*,*)'latitude en waterproperties=', Me%ExternalVar%Latitude !marta     
     end subroutine ReadLockExternalVar
 
 
@@ -25583,6 +25935,12 @@ cd1 :   if ((ready_ .EQ. IDLE_ERR_     ) .OR.                                 &
 
         call UngetHorizontalMap (Me%ObjHorizontalMap, Me%ExternalVar%WaterPoints2D, STAT = STAT_CALL)
         if (STAT_CALL /= SUCCESS_) call CloseAllAndStop ('ReadUnlockExternalVar - ModuleWaterProperties - ERR19')
+     
+        call UngetHorizontalGrid(Me%ObjHorizontalGrid, Me%ExternalVar%Latitude, STAT = STAT_CALL)
+        if (STAT_CALL /= SUCCESS_) call CloseAllAndStop ('ReadUnlockExternalVar - ModuleWaterProperties - ERR20')
+
+        call UngetHorizontalGrid(Me%ObjHorizontalGrid, Me%ExternalVar%Longitude, STAT = STAT_CALL)
+        if (STAT_CALL /= SUCCESS_) call CloseAllAndStop ('ReadUnlockExternalVar - ModuleWaterProperties - ERR21')
 
         call null_time(Me%ExternalVar%Now)
 
@@ -26467,7 +26825,7 @@ cd9 :               if (associated(PropertyX%Assimilation%Field)) then
 
                 !Interface
                 if (Me%Coupled%WQM%Yes  .or. Me%Coupled%CEQUALW2%Yes .or. &
-                    Me%Coupled%Life%Yes .or. Me%Coupled%WWTPQM%Yes &
+                    Me%Coupled%Life%Yes .or. Me%Coupled%WWTPQM%Yes  &                   
 #ifdef _PHREEQC_
                     .or. Me%Coupled%PhreeqC%Yes &
 #endif
@@ -26634,7 +26992,38 @@ cd9 :               if (associated(PropertyX%Assimilation%Field)) then
                     call KillInterface(Me%ObjInterfaceBivalve, STAT = STAT_CALL)
                     if (STAT_CALL /= SUCCESS_) &
                         call CloseAllAndStop ('KillWaterProperties - ModuleWaterProperties - ERR425a')
-                end if
+                end if                
+                
+                ! ------Carbonate System---------------@martalopez
+                if (Me%Coupled%CarbonateSystem%Yes) then
+                    
+                     nUsers = DeassociateInstance (mCarbonateSystem_, Me%ObjCarbonateSystem)
+                     if (nUsers == 0) call CloseAllAndStop ('KillWaterProperties - ModuleWaterProperties - ERR429')
+               
+                    call KillInterface(Me%ObjInterfaceCarbSyst, STAT = STAT_CALL)
+                    if (STAT_CALL /= SUCCESS_) &
+                        call CloseAllAndStop ('KillWaterProperties - ModuleWaterProperties - ERR429a')
+                    
+                    deallocate(Me%WQRate_for_CS%A_Denit)
+                    deallocate(Me%WQRate_for_CS%A_Nitri_1)
+                    deallocate(Me%WQRate_for_CS%A_Nitri_2)
+                    deallocate(Me%WQRate_for_CS%A_PP_ammon)
+                    deallocate(Me%WQRate_for_CS%A_PP_nitra)
+                    deallocate(Me%WQRate_for_CS%A_aer_mine)
+                    !deallocate(Me%WQRate_for_CS%A_CaCo3_dis)
+                    !deallocate(Me%WQRate_for_CS%A_CaCo3_prec)
+                    nullify(Me%WQRate_for_CS%A_Denit)
+                    nullify(Me%WQRate_for_CS%A_Nitri_1)
+                    nullify(Me%WQRate_for_CS%A_Nitri_2)
+                    nullify(Me%WQRate_for_CS%A_PP_ammon)  
+                    nullify(Me%WQRate_for_CS%A_PP_nitra)
+                    nullify(Me%WQRate_for_CS%A_aer_mine)  
+                    !nullify(Me%WQRate_for_CS%A_CaCo3_dis)  
+                    !nullify(Me%WQRate_for_CS%A_CaCo3_prec)                   
+                   
+                end if               
+                ! ------Carbonate System---------------                
+                
 
                 if(Me%Coupled%HybridReferenceField)then
 

@@ -57,8 +57,10 @@ Module ModuleWaterQuality
     private ::          Add_PropRateFlux
     private ::          Add_EquaRateFlux
 
-    public  ::          Construct_WQRateFlux
-   
+    public  ::      Construct_WQRateFlux
+    public  ::          Construct_WQRF_prop_Phyto
+    public  ::          Construct_WQRF_prop_Diatoms
+    
      !Selector
     public  :: GetDTWQM
     public  :: GetWQOptions
@@ -67,7 +69,7 @@ Module ModuleWaterQuality
     public  :: GetWQPropRateFlux   
     public  :: UnGetWQPropRateFlux              
                   
-    public  :: GetNCRatio            
+    public  :: GetNCRatio  
                   
     !Modifier
     public  :: WaterQuality            
@@ -88,9 +90,9 @@ Module ModuleWaterQuality
     private ::          WQBiogenicSilica
     private ::          WQDissolvedSilica
     private ::          WQNitrogen
-    private ::              WQAmmonia
-    private ::              WQNitrite
-    private ::              WQNitrate
+    private ::              WQAmmonia 
+    private ::              WQNitrite 
+    private ::              WQNitrate 
     private ::              WQOrganicNitrogen
     private ::                  WQParticulateOrganicNitrogen
     private ::                  WQDONRefractory
@@ -558,7 +560,7 @@ Module ModuleWaterQuality
         !----------------------------------------------------------------------
 
         STAT_ = UNKNOWN_
-
+        
         !Assures nullification of the global variable
         if (.not. ModuleIsRegistered(mWaterQuality_)) then
             nullify (FirstObjWaterQuality)
@@ -660,8 +662,12 @@ cd2:        if (.NOT. Me%CalcMethod%ExplicitMethod) then
         nullify(Me%IndTerm                 )
         nullify(Me%NewMass                 )
 
-    end Subroutine Nullify_all_Sub_Type_Pointers
-
+    end Subroutine Nullify_all_Sub_Type_Pointers    
+    
+    
+    !>@author:
+    !>@Brief:  
+    !>@param[in]    
     !--------------------------------------------------------------------------
 
     subroutine Construct_WQRateFlux(WaterQualityID, WQArrayLB, WQArrayUB, STAT)
@@ -670,19 +676,16 @@ cd2:        if (.NOT. Me%CalcMethod%ExplicitMethod) then
         integer                             :: WaterQualityID
         type(T_EquaRateFlux)    , pointer   :: EquaRateFluxX
         integer, optional                   :: STAT
-
         !External----------------------------------------------------------------
         integer                             :: WQArrayLB,WQArrayUB
-
         !Local-------------------------------------------------------------------
         type (T_PropRateFlux), pointer      :: NewPropRateFlux
-        type (T_EquaRateFlux), pointer      :: NewEquaRateFlux
-        
+        type (T_EquaRateFlux), pointer      :: NewEquaRateFlux        
         !Begin-------------------------------------------------------------------
-
         integer                             :: STAT_CALL
-        integer                             :: PropLB, PropUB
-                                            
+        integer                             :: PropLB, PropUB  
+        integer                             :: equa,countequa
+        integer                             :: STAT_, ready_        
         integer                             :: NumAM
         integer                             :: NumPON
         integer                             :: NumPONr
@@ -715,15 +718,8 @@ cd2:        if (.NOT. Me%CalcMethod%ExplicitMethod) then
         integer                             :: NumDiatom
         integer                             :: NumSiBio !aqui
         integer                             :: NumSiDiss !aqui
-
         logical, pointer, dimension (:)     :: LogicalEqua
-
-        integer                             :: equa,countequa
-        integer                             :: STAT_, ready_
-        logical                             :: CheckName
         !----------------------------------------------------------------------
-
-
         STAT_ = UNKNOWN_
 
         call Ready(WaterQualityID, ready_)
@@ -762,7 +758,6 @@ cd0 :   if (ready_ .EQ. IDLE_ERR_) then
             NumDiatom  = Me%PropIndex%Diatoms         !aqui
             NumSiBio   = Me%PropIndex%BiogenicSilica  !aqui
             NumSiDiss  = Me%PropIndex%DissolvedSilica !aqui
-
 
             PropUB = Me%Prop%IUB
             PropLB = Me%Prop%ILB
@@ -868,225 +863,57 @@ cd0 :   if (ready_ .EQ. IDLE_ERR_) then
             endif
        
             if (Me%PropCalc%Phyto) then 
-            !if phyto then gross production and growth limitations parameter output are available  
-            
-                !GrossProduction
-                allocate (Me%GrossProduction, STAT = STAT_CALL)            
-                
-                if (STAT_CALL .NE. SUCCESS_)                                                        &
-                    stop 'Subroutine Construct_WQRateFlux - ModuleWaterQuality. ERR01.'
-
-                CheckName = CheckPropertyName('grossprod', number = Me%GrossProduction%ID)
-
-                nullify(Me%GrossProduction%Field)
-                allocate(Me%GrossProduction%Field   (WQArrayLB:WQArrayUB))
-                !These "rates" need to be initialized or in no openpoints they will be filled with
-                !negative values. This may cause errors if in between WaterQuality computations a closed
-                !cell turns into open point and uses the negative "rate" values. David
-                Me%GrossProduction%Field = 0.0
-                
-                !TempLimitation
-                allocate (Me%TempLimitation, STAT = STAT_CALL)            
-                if (STAT_CALL .NE. SUCCESS_)                                                        &
-                    stop 'Subroutine Construct_WQRateFlux - ModuleWaterQuality. ERR02.'
-
-                CheckName = CheckPropertyName('temperaturelim', number = Me%TempLimitation%ID)
-
-                nullify(Me%TempLimitation%Field)
-                allocate(Me%TempLimitation%Field   (WQArrayLB:WQArrayUB))
-                !Limiting factors initialized as zero are consistent with zero gross production and avoid
-                !filling with other values (e.g. 1 * DT) that in no water points will not be transformed back to
-                ![0-1] in recieving modules (water properties, drainage network). David
-                Me%TempLimitation%Field = 0.0
-                
-                !NutLimitation
-                allocate (Me%NutLimitation, STAT = STAT_CALL)            
-                if (STAT_CALL .NE. SUCCESS_)                                                        &
-                    stop 'Subroutine Construct_WQRateFlux - ModuleWaterQuality. ERR03.'
-
-                CheckName = CheckPropertyName('nutrientlim', number = Me%NutLimitation%ID)  
-
-                nullify(Me%NutLimitation%field)
-                allocate(Me%NutLimitation%field   (WQArrayLB:WQArrayUB))
-                Me%NutLimitation%field = 0.0
-                
-                !NLimitation
-                allocate (Me%NLimitation, STAT = STAT_CALL)            
-                if (STAT_CALL .NE. SUCCESS_)                                                        &
-                    stop 'Subroutine Construct_WQRateFlux - ModuleWaterQuality. ERR03.'
-
-                CheckName = CheckPropertyName('nitrogenlim', number = Me%NLimitation%ID)  
-
-                nullify(Me%NLimitation%field)
-                allocate(Me%NLimitation%field   (WQArrayLB:WQArrayUB))
-                Me%NLimitation%field = 0.0
-
-                !PLimitation
-                allocate (Me%PLimitation, STAT = STAT_CALL)            
-                if (STAT_CALL .NE. SUCCESS_)                                                        &
-                    stop 'Subroutine Construct_WQRateFlux - ModuleWaterQuality. ERR03.'
-
-                CheckName = CheckPropertyName('phosphoruslim', number = Me%PLimitation%ID)  
-
-                nullify(Me%PLimitation%field)
-                allocate(Me%PLimitation%field   (WQArrayLB:WQArrayUB))
-                Me%PLimitation%field = 0.0
-
-                !LightLimitation
-                allocate (Me%LightLimitation, STAT = STAT_CALL)            
-                if (STAT_CALL .NE. SUCCESS_)                                                        &
-                    stop 'Subroutine Construct_WQRateFlux - ModuleWaterQuality. ERR04.'
-
-                CheckName = CheckPropertyName('lightlim', number = Me%LightLimitation%ID)
-
-                nullify(Me%LightLimitation%field)
-                allocate(Me%LightLimitation%field   (WQArrayLB:WQArrayUB))            
-                Me%LightLimitation%field = 0.0
-                
+            call Construct_WQRF_prop_Phyto(WQArrayLB,WQArrayUB)    !marta
             endif
-       
-           !aqui_1
+            !aqui_1
 
             if (Me%PropCalc%Diatoms) then 
-            !if diatoms then gross production and growth limitations parameter output are available  
-            
-            !DiaGrossProduction
-                allocate (Me%Diatoms%DiaGrossProduction, STAT = STAT_CALL)            
-                
-                if (STAT_CALL .NE. SUCCESS_)                                                        &
-                    stop 'Subroutine Construct_WQRateFlux - ModuleWaterQuality. ERR11.'
-
-                CheckName = CheckPropertyName('diagrossprod', number = Me%Diatoms%DiaGrossProduction%ID)
-
-                nullify(Me%Diatoms%DiaGrossProduction%Field)
-                allocate(Me%Diatoms%DiaGrossProduction%Field   (WQArrayLB:WQArrayUB))
-                Me%Diatoms%DiaGrossProduction%Field = 0.0
-                
-            !TempLimitation
-                allocate (Me%Diatoms%DiaTempLimitation, STAT = STAT_CALL)            
-                if (STAT_CALL .NE. SUCCESS_)                                                        &
-                    stop 'Subroutine Construct_WQRateFlux - ModuleWaterQuality. ERR12.'
-
-                CheckName = CheckPropertyName('diatemperaturelim', number = Me%Diatoms%DiaTempLimitation%ID)
-
-                nullify(Me%Diatoms%DiaTempLimitation%Field)
-                allocate(Me%Diatoms%DiaTempLimitation%Field   (WQArrayLB:WQArrayUB))
-                Me%Diatoms%DiaTempLimitation%Field = 0.0
-                
-            !NutLimitation
-                allocate (Me%Diatoms%DiaNutLimitation, STAT = STAT_CALL)            
-                if (STAT_CALL .NE. SUCCESS_)                                                        &
-                    stop 'Subroutine Construct_WQRateFlux - ModuleWaterQuality. ERR13.'
-
-                CheckName = CheckPropertyName('dianutrientlim', number = Me%Diatoms%DiaNutLimitation%ID)  
-
-                nullify(Me%Diatoms%DiaNutLimitation%field)
-                allocate(Me%Diatoms%DiaNutLimitation%field   (WQArrayLB:WQArrayUB))
-                Me%Diatoms%DiaNutLimitation%field = 0.0
-                
-            !DiaNLimitation
-                allocate (Me%Diatoms%DiaNLimitation, STAT = STAT_CALL)            
-                if (STAT_CALL .NE. SUCCESS_)                                                        &
-                    stop 'Subroutine Construct_WQRateFlux - ModuleWaterQuality. ERR13.'
-
-                CheckName = CheckPropertyName('dianitrogenlim', number = Me%Diatoms%DiaNLimitation%ID)  
-
-                nullify(Me%Diatoms%DiaNLimitation%field)
-                allocate(Me%Diatoms%DiaNLimitation%field   (WQArrayLB:WQArrayUB))
-                Me%Diatoms%DiaNLimitation%field = 0.0
-                
-            !DiaSiLimitation
-                allocate (Me%Diatoms%DiaSiLimitation, STAT = STAT_CALL)            
-                if (STAT_CALL .NE. SUCCESS_)                                                        &
-                    stop 'Subroutine Construct_WQRateFlux - ModuleWaterQuality. ERR13.'
-
-                CheckName = CheckPropertyName('diasilicalim', number = Me%Diatoms%DiaSiLimitation%ID)  
-
-                nullify(Me%Diatoms%DiaSiLimitation%field)
-                allocate(Me%Diatoms%DiaSiLimitation%field   (WQArrayLB:WQArrayUB))
-                Me%Diatoms%DiaSiLimitation%field = 0.0
-
-            !DiaPLimitation
-                allocate (Me%Diatoms%DiaPLimitation, STAT = STAT_CALL)            
-                if (STAT_CALL .NE. SUCCESS_)                                                        &
-                    stop 'Subroutine Construct_WQRateFlux - ModuleWaterQuality. ERR13.'
-
-                CheckName = CheckPropertyName('diaphosphoruslim', number = Me%Diatoms%DiaPLimitation%ID)  
-
-                nullify(Me%Diatoms%DiaPLimitation%field)
-                allocate(Me%Diatoms%DiaPLimitation%field   (WQArrayLB:WQArrayUB))
-                Me%Diatoms%DiaPLimitation%field = 0.0
-
-            !LightLimitation
-                allocate (Me%Diatoms%DiaLightLimitation, STAT = STAT_CALL)            
-                if (STAT_CALL .NE. SUCCESS_)                                                        &
-                    stop 'Subroutine Construct_WQRateFlux - ModuleWaterQuality. ERR14.'
-
-                CheckName = CheckPropertyName('dialightlim', number = Me%Diatoms%DiaLightLimitation%ID)
-
-                nullify(Me%Diatoms%DiaLightLimitation%field)
-                allocate(Me%Diatoms%DiaLightLimitation%field   (WQArrayLB:WQArrayUB))            
-                Me%Diatoms%DiaLightLimitation%field = 0.0
-                
+            call Construct_WQRF_prop_Diatoms(WQArrayLB,WQArrayUB)  !marta
             endif
-
+            
+            !Check number of properties with possible rate output is equal to number of properties 
+            !that are going to be calculated in the simulation 
             if (countequa.ne.PropUB)                                                                & 
-                stop 'Subroutine Construct_WQRateFlux - ModuleWaterQuality. ERR20.'
-
-            do equa = PropLB,PropUB
-
-                if (Logicalequa(equa)) then
-
+                stop 'Subroutine Construct_WQRateFlux - ModuleWaterQuality. ERR20.'            
+            
+            !Check along Logicalequa-1Darray if there is a numProperty = .true. 
+do1:        do equa = PropLB,PropUB
+                if (Logicalequa(equa)) then !If yes, allocate NewEquaRate
                     allocate (NewEquaRateFlux, STAT = STAT_CALL)            
                     if (STAT_CALL .NE. SUCCESS_)                                                    &
                         stop 'Subroutine Construct_WQRateFlux - ModuleWaterQuality. ERR30.'
-
                     nullify(NewEquaRateFlux%Prev,NewEquaRateFlux%Next)
                     nullify(NewEquaRateFlux%FirstPropRateFlux,NewEquaRateFlux%LastPropRateFlux)
-
-                    ! Add new Property to the WaterProperties List 
+                    ! Add new Property to the WaterProperties List. @marta: What??? I don't think so!
+                    ! Add the new property rateflux to the Water Quality rate fluxes list
                     call Add_EquaRateFlux(NewEquaRateFlux)         
-
                     NewEquaRateFlux%ID = equa
-
                     if (STAT_CALL .NE. SUCCESS_)                                                    &
                         stop 'Subroutine Construct_WQRateFlux - ModuleWaterQuality. ERR40.' 
-
                 endif
-            enddo
-
-
+            enddo do1    
+            
+            !While EquaRateFluxX associated, check along Logicalequa-1Darray if there is a numProperty=.true.
             EquaRateFluxX => Me%FirstEquaRateFlux  
-
-
-do1:        do while (associated(EquaRateFluxX))
-
+do2:        do while (associated(EquaRateFluxX))
                 do equa = PropLB,PropUB
-
-                    if (LogicalEqua(equa)) then
-
+                    if (LogicalEqua(equa)) then !If yes, allocate NewPropRateFlux
                         allocate (NewPropRateFlux, STAT = STAT_CALL)            
                         if (STAT_CALL .NE. SUCCESS_)                                                 &
                             stop 'Subroutine Construct_WQRateFlux - ModuleWaterQuality. ERR50.'
-
                         nullify(NewPropRateFlux%field)
                         nullify(NewPropRateFlux%Prev,NewPropRateFlux%Next)
-                        allocate(NewPropRateFlux%Field   (WQArrayLB:WQArrayUB))
-                        
+                        allocate(NewPropRateFlux%Field   (WQArrayLB:WQArrayUB))                        
                         ! Add new Prop  
-                        call Add_PropRateFlux(EquaRateFluxX, NewPropRateFlux)         
-
+                        call Add_PropRateFlux(EquaRateFluxX, NewPropRateFlux)      
                         NewPropRateFlux%ID         = equa
                         NewPropRateFlux%Field      = 0.
-
                         if (STAT_CALL .NE. SUCCESS_)                                                &
                             stop 'Subroutine Construct_WQRateFlux - ModuleWaterQuality. ERR60.' 
                     endif
-                enddo
-        
+                enddo        
                 EquaRateFluxX => EquaRateFluxX%Next
-
-            enddo do1
+            enddo do2
         
             nullify(EquaRateFluxX) 
 
@@ -1097,9 +924,184 @@ do1:        do while (associated(EquaRateFluxX))
 
         if (present(STAT))                                                                          &
             STAT = STAT_          
-          
+    !--------------------------------------------------------------------------      
     end subroutine Construct_WQRateFlux
+    !--------------------------------------------------------------------------
+    
+    
+     
+    !>@author: Modified by Marta López, Maretec
+    !>@Brief:If Phytoplankton property calculation is activated, gross production
+    !> and growth limitations parameter output are available, among others. 
+    !> This subroutine allocates the extra rates, verifies the name is correct and
+    !> allocates and initializates its array (Me%Phytoplankton%NameExtraRate%Field) 
+    !> to store the values of the extrarate
+    !>@param[in]    
+    !--------------------------------------------------------------------------
 
+    subroutine Construct_WQRF_prop_Phyto(WQ_ArrayLB,WQ_ArrayUB)
+    !External----------------------------------------------------------------
+        integer                             :: WQ_ArrayLB,WQ_ArrayUB    
+    !Local------------------------------------------------------------------- 
+        integer                             :: WQArrayLB,WQArrayUB 
+    !Begin-------------------------------------------------------------------
+        integer                             :: STAT_CALL
+        logical                             :: CheckName
+    !--------------------------------------------------------------------------
+        WQArrayLB = WQ_ArrayLB
+        WQArrayUB = WQ_ArrayUB  
+        
+    !GrossProduction
+        allocate (Me%GrossProduction, STAT = STAT_CALL)          
+        if (STAT_CALL .NE. SUCCESS_)                                                        &
+          stop 'Subroutine Construct_WQRateFlux - ModuleWaterQuality. ERR01.'
+        CheckName = CheckPropertyName('grossprod', number = Me%GrossProduction%ID)
+        nullify(Me%GrossProduction%Field)
+        allocate(Me%GrossProduction%Field   (WQArrayLB:WQArrayUB))
+          !These "rates" need to be initialized or in no openpoints they will be filled with
+          !negative values. This may cause errors if in between WaterQuality computations a closed
+          !cell turns into open point and uses the negative "rate" values. David
+       Me%GrossProduction%Field = 0.0
+                
+    !TempLimitation
+        allocate (Me%TempLimitation, STAT = STAT_CALL)            
+        if (STAT_CALL .NE. SUCCESS_)                                                        &
+          stop 'Subroutine Construct_WQRateFlux - ModuleWaterQuality. ERR02.'
+        CheckName = CheckPropertyName('temperaturelim', number = Me%TempLimitation%ID)
+        nullify(Me%TempLimitation%Field)
+        allocate(Me%TempLimitation%Field   (WQArrayLB:WQArrayUB))
+        !Limiting factors initialized as zero are consistent with zero gross production and avoid
+        !filling with other values (e.g. 1 * DT) that in no water points will not be transformed back to
+        ![0-1] in recieving modules (water properties, drainage network). David
+        Me%TempLimitation%Field = 0.0
+                
+     !NutLimitation
+        allocate (Me%NutLimitation, STAT = STAT_CALL)            
+        if (STAT_CALL .NE. SUCCESS_)                                                        &
+          stop 'Subroutine Construct_WQRateFlux - ModuleWaterQuality. ERR03.'
+        CheckName = CheckPropertyName('nutrientlim', number = Me%NutLimitation%ID)  
+        nullify(Me%NutLimitation%field)
+        allocate(Me%NutLimitation%field   (WQArrayLB:WQArrayUB))
+        Me%NutLimitation%field = 0.0
+                
+     !NLimitation
+        allocate (Me%NLimitation, STAT = STAT_CALL)            
+        if (STAT_CALL .NE. SUCCESS_)                                                        &
+          stop 'Subroutine Construct_WQRateFlux - ModuleWaterQuality. ERR03.'
+        CheckName = CheckPropertyName('nitrogenlim', number = Me%NLimitation%ID)  
+        nullify(Me%NLimitation%field)
+        allocate(Me%NLimitation%field   (WQArrayLB:WQArrayUB))
+        Me%NLimitation%field = 0.0
+
+     !PLimitation
+        allocate (Me%PLimitation, STAT = STAT_CALL)            
+        if (STAT_CALL .NE. SUCCESS_)                                                        &
+          stop 'Subroutine Construct_WQRateFlux - ModuleWaterQuality. ERR03.'
+        CheckName = CheckPropertyName('phosphoruslim', number = Me%PLimitation%ID) 
+        nullify(Me%PLimitation%field)
+        allocate(Me%PLimitation%field   (WQArrayLB:WQArrayUB))
+        Me%PLimitation%field = 0.0
+
+      !LightLimitation
+        allocate (Me%LightLimitation, STAT = STAT_CALL)            
+        if (STAT_CALL .NE. SUCCESS_)                                                        &
+          stop 'Subroutine Construct_WQRateFlux - ModuleWaterQuality. ERR04.'
+        CheckName = CheckPropertyName('lightlim', number = Me%LightLimitation%ID)
+        nullify(Me%LightLimitation%field)
+        allocate(Me%LightLimitation%field   (WQArrayLB:WQArrayUB))            
+        Me%LightLimitation%field = 0.0     
+    !--------------------------------------------------------------------------
+    end subroutine Construct_WQRF_prop_Phyto
+    !--------------------------------------------------------------------------
+    
+    
+    !>@author: Modified by Marta López, Maretec
+    !>@Brief:If Diatoms property calculation is activated, gross production
+    !> and growth limitations parameter output are available, among others. 
+    !> This subroutine allocates the extra rates, verifies the name is correct and
+    !> allocates and initializates its array (Me%Diatoms%NameExtraRate%Field) 
+    !> to store the values of the extrarate
+    !>@param[in]    
+    !--------------------------------------------------------------------------
+    subroutine Construct_WQRF_prop_Diatoms(WQ_ArrayLB,WQ_ArrayUB)
+    !External----------------------------------------------------------------
+        integer                             :: WQ_ArrayLB,WQ_ArrayUB    
+    !Local------------------------------------------------------------------- 
+        integer                             :: WQArrayLB,WQArrayUB         
+    !Begin-------------------------------------------------------------------
+        integer                             :: STAT_CALL
+        logical                             :: CheckName
+    !--------------------------------------------------------------------------
+        WQArrayLB = WQ_ArrayLB
+        WQArrayUB = WQ_ArrayUB 
+        
+    !DiaGrossProduction
+      allocate (Me%Diatoms%DiaGrossProduction, STAT = STAT_CALL)                  
+      if (STAT_CALL .NE. SUCCESS_)                                                        &
+        stop 'Subroutine Construct_WQRateFlux - ModuleWaterQuality. ERR11.'
+      CheckName = CheckPropertyName('diagrossprod', number = Me%Diatoms%DiaGrossProduction%ID)
+      nullify(Me%Diatoms%DiaGrossProduction%Field)
+      allocate(Me%Diatoms%DiaGrossProduction%Field   (WQArrayLB:WQArrayUB))
+      Me%Diatoms%DiaGrossProduction%Field = 0.0
+                
+    !TempLimitation
+      allocate (Me%Diatoms%DiaTempLimitation, STAT = STAT_CALL)            
+      if (STAT_CALL .NE. SUCCESS_)                                                        &
+        stop 'Subroutine Construct_WQRateFlux - ModuleWaterQuality. ERR12.'
+      CheckName = CheckPropertyName('diatemperaturelim', number = Me%Diatoms%DiaTempLimitation%ID)
+      nullify(Me%Diatoms%DiaTempLimitation%Field)
+      allocate(Me%Diatoms%DiaTempLimitation%Field   (WQArrayLB:WQArrayUB))
+      Me%Diatoms%DiaTempLimitation%Field = 0.0
+                
+    !NutLimitation
+      allocate (Me%Diatoms%DiaNutLimitation, STAT = STAT_CALL)            
+      if (STAT_CALL .NE. SUCCESS_)                                                        &
+        stop 'Subroutine Construct_WQRateFlux - ModuleWaterQuality. ERR13.'
+      CheckName = CheckPropertyName('dianutrientlim', number = Me%Diatoms%DiaNutLimitation%ID)  
+      nullify(Me%Diatoms%DiaNutLimitation%field)
+      allocate(Me%Diatoms%DiaNutLimitation%field   (WQArrayLB:WQArrayUB))
+      Me%Diatoms%DiaNutLimitation%field = 0.0
+                
+    !DiaNLimitation
+      allocate (Me%Diatoms%DiaNLimitation, STAT = STAT_CALL)            
+      if (STAT_CALL .NE. SUCCESS_)                                                        &
+        stop 'Subroutine Construct_WQRateFlux - ModuleWaterQuality. ERR13.'
+      CheckName = CheckPropertyName('dianitrogenlim', number = Me%Diatoms%DiaNLimitation%ID)  
+      nullify(Me%Diatoms%DiaNLimitation%field)
+      allocate(Me%Diatoms%DiaNLimitation%field   (WQArrayLB:WQArrayUB))
+      Me%Diatoms%DiaNLimitation%field = 0.0
+                
+     !DiaSiLimitation
+      allocate (Me%Diatoms%DiaSiLimitation, STAT = STAT_CALL)            
+      if (STAT_CALL .NE. SUCCESS_)                                                        &
+        stop 'Subroutine Construct_WQRateFlux - ModuleWaterQuality. ERR13.'
+      CheckName = CheckPropertyName('diasilicalim', number = Me%Diatoms%DiaSiLimitation%ID)  
+      nullify(Me%Diatoms%DiaSiLimitation%field)
+      allocate(Me%Diatoms%DiaSiLimitation%field   (WQArrayLB:WQArrayUB))
+      Me%Diatoms%DiaSiLimitation%field = 0.0
+
+     !DiaPLimitation
+      allocate (Me%Diatoms%DiaPLimitation, STAT = STAT_CALL)            
+      if (STAT_CALL .NE. SUCCESS_)                                                        &
+        stop 'Subroutine Construct_WQRateFlux - ModuleWaterQuality. ERR13.'
+      CheckName = CheckPropertyName('diaphosphoruslim', number = Me%Diatoms%DiaPLimitation%ID)  
+      nullify(Me%Diatoms%DiaPLimitation%field)
+      allocate(Me%Diatoms%DiaPLimitation%field   (WQArrayLB:WQArrayUB))
+      Me%Diatoms%DiaPLimitation%field = 0.0
+
+     !LightLimitation
+      allocate (Me%Diatoms%DiaLightLimitation, STAT = STAT_CALL)            
+      if (STAT_CALL .NE. SUCCESS_)                                                        &
+        stop 'Subroutine Construct_WQRateFlux - ModuleWaterQuality. ERR14.'
+      CheckName = CheckPropertyName('dialightlim', number = Me%Diatoms%DiaLightLimitation%ID)
+      nullify(Me%Diatoms%DiaLightLimitation%field)
+      allocate(Me%Diatoms%DiaLightLimitation%field   (WQArrayLB:WQArrayUB))            
+      Me%Diatoms%DiaLightLimitation%field = 0.0      
+    !--------------------------------------------------------------------------
+    end subroutine Construct_WQRF_prop_Diatoms
+    !--------------------------------------------------------------------------
+    
+    
     !----------------------------------------------------------------------------
     !This subroutine adds a new property rateflux to the Rate Fluxes List
     subroutine Add_EquaRateFlux(NewEquaRateFlux)
@@ -1135,20 +1137,19 @@ do1:        do while (associated(EquaRateFluxX))
         if (.not.associated(EquaRateFluxX%FirstPropRateFlux)) then
         
             EquaRateFluxX%FirstPropRateFlux        => NewPropRateFlux
-            EquaRateFluxX%LastPropRateFlux         => NewPropRateFlux
-        
-        else
-            
+            EquaRateFluxX%LastPropRateFlux         => NewPropRateFlux        
+        else            
             NewPropRateFlux%Prev                   => EquaRateFluxX%LastPropRateFlux
             EquaRateFluxX%LastPropRateFlux%Next    => NewPropRateFlux
             EquaRateFluxX%LastPropRateFlux         => NewPropRateFlux
         
         end if 
-
+   !--------------------------------------------------------------------------
     end subroutine Add_PropRateFlux 
-
-    !--------------------------------------------------------------------------
+   !--------------------------------------------------------------------------
     
+    
+   !--------------------------------------------------------------------------
     subroutine WaterQualityOptions  
 
         !External--------------------------------------------------------------
@@ -1537,7 +1538,7 @@ do1:        do while (associated(EquaRateFluxX))
         if (STAT_CALL .NE. SUCCESS_)                                                                &
             stop 'Subroutine WQReadCalcOptions - ModuleWaterQuality. ERR02.' 
 
-            !Verifica se se pretende calcular usando um metodo IMPLICITO/EXPLICITO        
+        !Verifica se se pretende calcular usando um metodo IMPLICITO/EXPLICITO        
         call GetData(Me%CalcMethod%SemiimpMethod,                                                   & 
                      Me%ObjEnterData, flag,                                                         &
                      SearchType = FromFile,                                                         &
@@ -4375,165 +4376,124 @@ cd1 :   if ((ready_ .EQ. IDLE_ERR_     ) .OR.                                 &
         if (present(STAT))                                                    &
             STAT = STAT_
 
-        !----------------------------------------------------------------------
-
+   !----------------------------------------------------------------------
     end subroutine GetDTWQM
-
+   !----------------------------------------------------------------------
+     
+    
+    !>@author: ? . Revised by Marta López, Maretec
+    !>@Brief: Stores in PropRateFlux the choosen rate by the user (known through 
+    !> Firstprop and SecondPropr) for subroutine GetRateFlux placed in module Interface.
+    !> It goes through EquaRateFlux, built with WQuality properties index numbers, and  
+    !> PropRateFlux 
+    !>@param[in]  Firstprop, Secondprop   
     !--------------------------------------------------------------------------
  
     subroutine GetWQPropRateFlux(WaterQualityID, Firstprop, Secondprop, PropRateFlux, STAT)
 
         !Arguments-------------------------------------------------------------
-        integer                             :: WaterQualityID
-        real, dimension(:),     pointer     :: PropRateFlux
-        integer                             :: Firstprop,Secondprop
-        integer, optional, intent(OUT)      :: STAT
-
+        integer                                  :: WaterQualityID
+        integer           , intent(IN )          :: Firstprop,Secondprop        
+        integer,  optional, intent(OUT)          :: STAT
+        real, dimension(:), intent(OUT), pointer :: PropRateFlux 
         !External--------------------------------------------------------------
-        integer         :: ready_        
-
+        integer                                  :: ready_       
         !Local-----------------------------------------------------------------
-        integer                             :: STAT_
-        integer                             :: prop,equa
-        logical                             :: found       
-        type(T_EquaRateFlux),       pointer :: EquaRateFluxX
-        type(T_PropRateFlux),   pointer     :: PropRateFluxX
-
+        integer                                  :: STAT_
+        integer                                  :: prop,equa
+        logical                                  :: found       
+        type(T_EquaRateFlux),   pointer :: EquaRateFluxX !WQuality property index number (not Globaldata ID!)
+        type(T_PropRateFlux),   pointer :: PropRateFluxX 
         !----------------------------------------------------------------------
-
         STAT_ = UNKNOWN_
-
-        call Ready(WaterQualityID, ready_)    
         
-        found=.FALSE.
-
-cd1 :   if ((ready_ .EQ. IDLE_ERR_     ) .OR.                                 &
+        call Ready(WaterQualityID, ready_)   
+cd1 :   if ((ready_ .EQ. IDLE_ERR_     ) .OR.     &
             (ready_ .EQ. READ_LOCK_ERR_)) then
-
-
             call Read_Lock(mWATERQUALITY_, Me%InstanceID)
-
-
-                EquaRateFluxX => Me%FirstEquaRateFlux
-
-do1 :           do while(associated(EquaRateFluxX))  
-                    
-                    PropRateFluxX => EquaRateFluxX%FirstPropRateFlux
-                    
-                    do while(associated(PropRateFluxX))  
-                    
-                        equa = EquaRateFluxX%ID
-                        prop = PropRateFluxX%ID
-                   
+               
+        found=.FALSE.
+        
+        !Go through EquaRateFlux and PropRateFlux
+        EquaRateFluxX => Me%FirstEquaRateFlux   
+do1 :   do while(associated(EquaRateFluxX))                    
+             PropRateFluxX => EquaRateFluxX%FirstPropRateFlux                    
+                    do while(associated(PropRateFluxX))                      
+                        equa = EquaRateFluxX%ID 
+                        prop = PropRateFluxX%ID                    
                         if(Prop.eq.Firstprop.and.Equa.eq.SecondProp) then
-
-                            PropRateFlux => PropRateFluxX%Field (:)
-
+                            PropRateFlux => PropRateFluxX%Field (:)                     
                             found=.true.
                             exit do1
-
-                        endif
-                     
+                        endif                     
                         PropRateFluxX => PropRateFluxX%Next
+                    end do                 
+             EquaRateFluxX => EquaRateFluxX%Next          
+        end do do1
 
-                    end do
-                 
-                    EquaRateFluxX => EquaRateFluxX%Next
-          
-                end do do1
-
-
-               !aqui_3
-                if (.NOT.found) then
-
+        !If Firstprop,Secondprop are not found in EquaRateFlux and PropRateFlux
+        !check if Firstprop is equal to the following ones 
+        !aqui_3
+          if (.NOT.found) then
                     if (FirstProp.eq. Me%GrossProduction%ID) then
-
                         PropRateFlux => Me%GrossProduction%Field
+                        !write(*,*)'grossprod = ', PropRateFlux
                         found=.TRUE.
-
                     elseif (FirstProp.eq. Me%TempLimitation%ID) then
-
                         PropRateFlux => Me%TempLimitation%Field
                         found=.TRUE.
-
                     elseif (FirstProp.eq. Me%NutLimitation%ID) then
-
                         PropRateFlux => Me%NutLimitation%Field
                         found=.TRUE.
-
                     elseif (FirstProp.eq. Me%NLimitation%ID) then
-
                         PropRateFlux => Me%NLimitation%Field
                         found=.TRUE.
-
                     elseif (FirstProp.eq. Me%PLimitation%ID) then
-
                         PropRateFlux => Me%PLimitation%Field
                         found=.TRUE.
-
                     elseif (FirstProp.eq. Me%LightLimitation%ID) then
-
                         PropRateFlux => Me%LightLimitation%Field
-                        found=.TRUE.
-                    
+                        found=.TRUE.                    
                     elseif (FirstProp.eq. Me%Diatoms%DiaGrossProduction%ID) then
-
                         PropRateFlux => Me%Diatoms%DiaGrossProduction%Field
                         found=.TRUE.
-
                     elseif (FirstProp.eq. Me%Diatoms%DiaTempLimitation%ID) then
-
                         PropRateFlux => Me%Diatoms%DiaTempLimitation%Field
                         found=.TRUE.
-
                     elseif (FirstProp.eq. Me%Diatoms%DiaNutLimitation%ID) then
-
                         PropRateFlux => Me%Diatoms%DiaNutLimitation%Field
                         found=.TRUE.
-
                     elseif (FirstProp.eq. Me%Diatoms%DiaNLimitation%ID) then
-
                         PropRateFlux => Me%Diatoms%DiaNLimitation%Field
                         found=.TRUE.
-
                     elseif (FirstProp.eq. Me%Diatoms%DiaPLimitation%ID) then
-
                         PropRateFlux => Me%Diatoms%DiaPLimitation%Field
                         found=.TRUE.
-
                     elseif (FirstProp.eq. Me%Diatoms%DiaSiLimitation%ID) then
-
                         PropRateFlux => Me%Diatoms%DiaSiLimitation%Field
                         found=.TRUE.
-
                     elseif (FirstProp.eq. Me%Diatoms%DiaLightLimitation%ID) then
-
                         PropRateFlux => Me%Diatoms%DiaLightLimitation%Field
                         found=.TRUE.
-
                     endif
-
                 endif
 
                 nullify  (PropRateFluxX,EquaRateFluxX)
            
-            if (found) then              
+    cd2 : if (found) then              
                 STAT_ = SUCCESS_
-            else
+          else
                 STAT_ = NOT_FOUND_ERR_
-            endif
-        else cd1
-            STAT_ = ready_
-        end if cd1
-
-
-        if (present(STAT))                                                    &
+          endif cd2      
+            
+       else cd1
+            STAT_ = ready_            
+       end if cd1
+        
+        if (present(STAT))   &
             STAT = STAT_
-
-        !----------------------------------------------------------------------
-
+    !----------------------------------------------------------------------
     end subroutine GetWQPropRateFlux
-
     !--------------------------------------------------------------------------
 
     
@@ -4578,8 +4538,7 @@ cd1 :   if (ready_ .EQ. READ_LOCK_ERR_) then
     !--------------------------------------------------------------------------
 
 
-
-
+        
     !++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
     !++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
@@ -4847,15 +4806,15 @@ do1 :       do index = WQArrayLB, WQArrayUB
 
 
 
-
-
-
 !********************
 !********* ver Sophie
 !********************
-
+                            
+    !>@author:
+    !>@Brief: Initialization of matrix and indterm arrays
+    !>@param[in]    
     !----------------------------------------------------------------------------
-
+   
     subroutine StartWaterQualityIteration
 
         !Local-------------------------------------------------------------------
@@ -5035,7 +4994,9 @@ do2 :       do j = PropLB, PropUB
     !--------------------------------------------------------------------------
 
 
-
+    !>@author:
+    !>@Brief: Initialization of matrix and indterm arrays
+    !>@param[in]  
     !--------------------------------------------------------------------------
 
     subroutine WQSystemResolution(index)
@@ -5066,8 +5027,9 @@ cd3 :           if (equa .EQ. prop) then
                     Me%IndTerm(equa) =  Me%IndTerm         (equa)                      &
                                      -((Me%Matrix          (equa, prop) - 1.0)         &
                                       * Me%ExternalVar%Mass(prop, index))
-                else cd3
-                    Me%IndTerm(equa) =  Me%IndTerm         (equa      )                &
+else cd3
+
+    Me%IndTerm(equa) =  Me%IndTerm         (equa      )                &
                                      -  Me%Matrix          (equa, prop)                &
                                      *  Me%ExternalVar%Mass(prop, index)
                 end if cd3
@@ -5160,7 +5122,6 @@ do33 :      do prop = PropLB, PropUB
     
         !Arguments-------------------------------------------------------------
         integer, intent(IN)                 :: index
-
         !Local-----------------------------------------------------------------
         integer                             :: Phyto
         integer                             :: Diatoms    !aqui
@@ -5168,9 +5129,7 @@ do33 :      do prop = PropLB, PropUB
         integer                             :: PropUB,PropLB,equa,prop
         type(T_PropRateFlux),       pointer :: PropRateFluxX
         type(T_EquaRateFlux),       pointer :: EquaRateFluxX 
-
         !----------------------------------------------------------------------
-
         Phyto   = Me%PropIndex%Phyto
         Diatoms = Me%PropIndex%Diatoms          !aqui
 
@@ -5178,24 +5137,24 @@ do33 :      do prop = PropLB, PropUB
         propUB  = Me%Prop%IUB
         DTSec   = Me%DTSecond
 
-        
-cd0:    if (Me%PropCalc%Phyto) then
-           
+cd0:    if (Me%PropCalc%Phyto) then     
+    
            Me%GrossProduction%field(index)= Me%GrowMaxPhytoRate                                  &
                                           * Me%TPhytoLimitationFactor                            &
                                           * Me%PhytoLightLimitationFactor                        &
                                           * Me%PhytoNutrientsLimitationFactor                    &
                                           * Me%ExternalVar%Mass(Phyto,index)                     &
                                           * DTSec
-                                       
+           !write(*,*)'grossproductionphyto =', Me%GrossProduction%field(index)        !marta                 
                          
+
            Me%NutLimitation%field(index)  = Me%PhytoNutrientsLimitationFactor * DTSec
            Me%NLimitation%field(index)    = Me%PhytoNLimitationFactor         * DTSec
            Me%PLimitation%field(index)    = Me%PhytoPLimitationFactor         * DTSec
            Me%LightLimitation%field(index)= Me%PhytoLightLimitationFactor     * DTSec
-           Me%TempLimitation%field(index) = Me%TPhytoLimitationFactor         * DTSec
- 
-        endif    cd0                    
+           Me%TempLimitation%field(index) = Me%TPhytoLimitationFactor         * DTSec 
+           
+        endif cd0                    
              
         !aqui_5
         if (Me%PropCalc%Diatoms) then
@@ -5206,7 +5165,7 @@ cd0:    if (Me%PropCalc%Phyto) then
                                                      * Me%Diatoms%DiaNutrientsLimitationFactor   &
                                                      * Me%ExternalVar%Mass(Diatoms,index)        &
                                                      * DTSec
-                             
+           !write(*,*)'grossproductiondiat =', Me%Diatoms%DiaGrossProduction%field(index)        !marta                    
            Me%Diatoms%DiaNutLimitation%field(index)  = Me%Diatoms%DiaNutrientsLimitationFactor * DTSec
            Me%Diatoms%DiaNLimitation%field(index)    = Me%Diatoms%DiaNLimitationFactor         * DTSec
            Me%Diatoms%DiaPLimitation%field(index)    = Me%Diatoms%DiaPLimitationFactor         * DTSec
@@ -5229,17 +5188,18 @@ do1:    do while(associated(EquaRateFluxX))
                          
                 equa = EquaRateFluxX%ID
                 prop = PropRateFluxX%ID
-
+      
+          
                 if (equa.ne.prop) then
 
                      PropRateFluxX%Field(index)=  -Me%Matrix(equa, prop)                     & 
-                                                  * Me%ExternalVar%Mass(prop,index)
+                                                  * Me%ExternalVar%Mass(prop,index)                 
                 else
                       !the rates were inconsistent with system resolution and results
 !                     PropRateFluxX%Field(index)=  -(1-Me%Matrix(equa, prop))                 & 
 !                                                  * Me%ExternalVar%Mass(prop,index)
                      PropRateFluxX%Field(index)=  -(Me%Matrix(equa, prop) - 1.)              & 
-                                                  * Me%ExternalVar%Mass(prop,index)
+                                                  * Me%ExternalVar%Mass(prop,index)              
 
                 endif
 
@@ -8045,11 +8005,11 @@ subroutine WQAmmonia(index, RefrAmmoniaMinRate,                                 
 
         NitrificationRateK1 = Me%KNitrificationRateK1 * Me%TNitrification                               &
                          **(Me%ExternalVar%Temperature(index) - 20.0) * x5
-
+      !write(*,*)'nitrificationratek1=',NitrificationRateK1 !marta
     
         NitrificationRateK2 = Me%KNitrificationRateK2 * Me%TNitrification                           &
                          **(Me%ExternalVar%Temperature(index) - 20.0) * x5
-                         
+       !write(*,*)'nitrificationratek1=',NitrificationRateK2    !marta              
                                             
     !MineralizationRate-------------------------------------------------------
 
@@ -8150,6 +8110,7 @@ cd3 :       if (.NOT.Me%PropCalc%Bacteria) then
    !Calculation of system coeficients---------------------------------------
 
        Me%Matrix(AM, AM   ) = 1.0 + NitrificationRateK1 * DTDay
+      ! write(*,*)'Me%matrix(AM;AM)=', Me%Matrix(AM, AM   )   !marta  
 
        if (.NOT.Me%PropCalc%Bacteria) then
        
@@ -8219,6 +8180,7 @@ subroutine WQNitrite(index, NitrificationRateK1, NitrificationRateK2)
         Me%Matrix(NI, NI) =   DTDay * (NitrificationRateK2) + 1.0 
         
         Me%Matrix(NI, AM) =   DTDay * (-NitrificationRateK1)
+         !write(*,*)'Me%matrix(NI, AM)=', Me%Matrix(NI, AM)  !marta  
         
         if (Me%PropCalc%Oxygen) Me%Matrix(O, NI) = DTDay * OxygenSinkNitrificationRateK2 
 
@@ -8249,35 +8211,24 @@ end subroutine WQNitrite
 subroutine WQNitrate(index, NitrificationRateK2)
 
     !Arguments---------------------------------------------------------------
-
         integer, intent(IN) :: index
-
-        real, intent(IN) :: NitrificationRateK2                       
-
+        real, intent(IN) :: NitrificationRateK2                     
     !Local-------------------------------------------------------------------
-
         integer :: O
         integer :: NA
         integer :: NI
         integer :: BOD
-
         real    :: ODsourceDenitrificationRate   = null_real
         real    :: DenitrificationRate           = null_real
         real    :: DTDay
         real    :: x1                            = null_real
-
     !------------------------------------------------------------------------
-
         O       = Me%PropIndex%Oxygen
         NA      = Me%PropIndex%Nitrate
         NI      = Me%PropIndex%Nitrite
         BOD     = Me%PropIndex%BOD
-
         DTDay     = Me%DTDay
-
-    !------------------------------------------------------------------------
-
-                         
+    !------------------------------------------------------------------------                         
     !DenitrificationRate, denitrification rate
         x1 = Me%DenitrificationSatConst / (Me%DenitrificationSatConst                               &
                                          + MAX(Me%ExternalVar%Mass(O, index),Me%MinOxygen))
@@ -8285,13 +8236,12 @@ subroutine WQNitrate(index, NitrificationRateK2)
         DenitrificationRate = Me%KDenitrificationRate * Me%TDenitrification                         &
                             ** (Me%ExternalVar%Temperature(index) - 20.) * x1
 
-
+       !write(*,*) 'DenitRate = ',DenitrificationRate !marta
     !BOD not consumed due to anaerobic organic matter decomposition during Denitrification
         !aqui_6 5/4 não percebi...acho que não existe libertação de O2 com a desnitrificação 
         if (Me%PropCalc%Oxygen)                                                                     &
             ODsourceDenitrificationRate = 5.0 / 4.0 * Me%NConsOxyNitRatio                           &
                                                     * DenitrificationRate
-
     !Calculation of system coeficients---------------------------------------
         Me%Matrix(NA, NA) = 1. + DTDay * (DenitrificationRate)
 
@@ -8300,15 +8250,10 @@ subroutine WQNitrate(index, NitrificationRateK2)
 
         if (Me%PropCalc%Oxygen)                                                                     &
             Me%Matrix(O, NA) = -DTDay * ODsourceDenitrificationRate   
-
-
     !Independent term
         Me%IndTerm(NA) = Me%ExternalVar%Mass(NA, index) 
-
     !------------------------------------------------------------------------
-
 end subroutine WQNitrate
-
     !----------------------------------------------------------------------------
 
     !----------------------------------------------------------------------------
