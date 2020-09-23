@@ -63,7 +63,8 @@ Module ModuleField4D
                                        HDF5SetLimits, GetHDF5ArrayDimensions, KillHDF5, &
                                        HDF5WriteData, HDF5FlushMemory, HDF5WriteData,   &
                                        GetHDF5GroupExist, GetHDF5DataSetExist,          &
-                                       GetHDF5ArrayDim, HDF5ReadData
+                                       GetHDF5ArrayDim, HDF5ReadData,                   &
+                                       GetHDF5AllDataSetsOK
 #ifndef _NO_NETCDF                                       
     ! Manages NetCDF files
     use ModuleNetCDF,           only : GetNCDFFileAccess, ConstructNETCDF,              &
@@ -317,6 +318,7 @@ Module ModuleField4D
         real                                        :: DefaultValue         = null_real
         real                                        :: PredictedDT          = -null_real
         real                                        :: DTForNextEvent       = -null_real
+        
         type(T_PropField), pointer                  :: Next                 => null()    
     end type T_PropField            
 
@@ -377,6 +379,9 @@ Module ModuleField4D
         integer                                     :: ClientID             = null_int
         real,    dimension(2,2)                     :: WindowLimitsXY       = null_real
         type (T_Size2D)                             :: WindowLimitsJI        
+        
+        logical                                     :: CheckHDF5_File       = .false.         
+        
         type(T_Field4D), pointer                    :: Next                 => null()
     end type  T_Field4D
 
@@ -403,7 +408,7 @@ Module ModuleField4D
                                 LonReference, WindowLimitsXY, WindowLimitsJI,           &
                                 Extrapolate, ExtrapolateMethod, PropertyID, ClientID,   &
                                 FileNameList, FieldName, OnlyReadGridFromFile,          &
-                                DiscardFillValues, STAT)
+                                DiscardFillValues, CheckHDF5_File, STAT)
 
         !Arguments---------------------------------------------------------------
         integer,                                        intent(INOUT) :: Field4DID
@@ -429,6 +434,7 @@ Module ModuleField4D
         character(*),                         optional, intent(IN )   :: FieldName             
         logical,                              optional, intent(IN )   :: OnlyReadGridFromFile 
         logical,                              optional, intent(IN )   :: DiscardFillValues
+        logical,                              optional, intent(IN )   :: CheckHDF5_File  
         integer,                              optional, intent(OUT)   :: STAT     
         
         !Local-------------------------------------------------------------------
@@ -507,6 +513,12 @@ cd0 :   if (ready_ .EQ. OFF_ERR_) then
             
             Me%WindowWithData    = .true. 
 
+            if (present(CheckHDF5_File)) then
+                Me%CheckHDF5_File  = CheckHDF5_File
+            else
+                Me%CheckHDF5_File  = .false.
+            endif
+        
             call ConstructFile(ExtractType)
         
             if (present(Extrapolate)) then
@@ -2046,9 +2058,11 @@ wwd1:       if (Me%WindowWithData) then
         if (STAT_CALL /= SUCCESS_) stop 'ReadOptions - ModuleField4D - ERR320'        
         
 
+        
+
         ! Check if the simulation goes backward in time or forward in time (default mode)
         call GetBackTracking(Me%ObjTime, Me%BackTracking, STAT = STAT_CALL)                    
-        if (STAT_CALL /= SUCCESS_) stop 'ReadOptions - ModuleField4D - ERR330' 
+        if (STAT_CALL /= SUCCESS_) stop 'ReadOptions - ModuleField4D - ERR340' 
         
         
 
@@ -2312,6 +2326,14 @@ i0:     if(PropField%SpaceDim == Dim2D) then
                     call ConstructHDF5 (Me%File%ObjList(n), trim(Me%File%FileNameList(n)), HDF5_READ, STAT = STAT_CALL)
                     if (STAT_CALL /= SUCCESS_) stop 'ConstructFile - ModuleField4D - ERR30'
                     
+                    if (Me%CheckHDF5_File) then
+        
+                        call GetHDF5AllDataSetsOK (HDF5ID   = Me%File%ObjList(n),       &
+                                                   STAT     = STAT_CALL)                                      
+                        if (STAT_CALL /= SUCCESS_) stop 'ConstructFile - ModuleField4D - ERR35'
+            
+                    endif
+                    
                 enddo
                 
                 Me%File%Obj = Me%File%ObjList(1)
@@ -2319,6 +2341,14 @@ i0:     if(PropField%SpaceDim == Dim2D) then
             
                 call ConstructHDF5 (Me%File%Obj, trim(Me%File%FileName), HDF5_READ, STAT = STAT_CALL)
                 if (STAT_CALL /= SUCCESS_) stop 'ConstructFile - ModuleField4D - ERR40'
+            
+                if (Me%CheckHDF5_File) then
+        
+                    call GetHDF5AllDataSetsOK (HDF5ID   = Me%File%Obj,                  &
+                                               STAT     = STAT_CALL)                                      
+                    if (STAT_CALL /= SUCCESS_) stop 'ConstructFile - ModuleField4D - ERR45'
+            
+                endif
             
             endif
             
@@ -5072,7 +5102,7 @@ d2:     do N =1, NW
         !Local-----------------------------------------------------------------
         type (T_PropField), pointer                     :: PropField
         integer                                         :: STAT_, ready_, STAT_CALL
-        integer                                         :: i, j, k
+        integer                                         :: k
         integer                                         :: SizeI1, SizeJ1, SizeK1
         integer                                         :: SizeI2, SizeJ2, SizeK2        
         integer                                         :: ILB1,IUB1,JLB1,JUB1,KLB1,KUB1
@@ -5500,11 +5530,17 @@ CTF:                if (CorrectTimeFrame) then
                     
                     else if (PropField%SpaceDim == Dim3D) then
                 
+                        if (PropField%From2Dto3D) then
+                            call Interpolate2DCloud3DMatrix (PropField, X, Y, Field, NoData) 
+                        else
+                
                         if (.not.present(Z)) then
                             stop 'ModifyField4DXYZ - ModuleField4D - ERR50'
                         endif
 
                         call Interpolate3DCloud (PropField, X, Y, Z, Field, NoData) 
+                            
+                        endif
                     endif
                     
                 endif                    
@@ -5865,6 +5901,251 @@ dnP:    do nP = 1,nPoints
 
      end subroutine Interpolate2DCloud     
     !----------------------------------------------------------------------
+
+    subroutine Interpolate2DCloud3DMatrix (PropField, X, Y, Field, NoData) 
+        
+        !Arguments------------------------------------------------------------
+        type (T_PropField),         pointer, intent(IN)     :: PropField
+        real,       dimension(:),   pointer, intent(IN)     :: X, Y
+        real,       dimension(:),   pointer, intent(INOUT)  :: Field
+        logical,    dimension(:),   pointer, intent(INOUT)  :: NoData
+        !Local----------------------------------------------------------------
+        real                                            :: ValueSW, ValueNW, ValueSE, ValueNE, ValueN, ValueS
+        integer                                         :: MaskSW, MaskNW, MaskSE, MaskNE, MaskN, MaskS       
+        real                                            :: X_W, X_E, Xv, Y_S, Y_N, Yv, PercI, PercJ  
+        integer                                         :: STAT_CALL, nPoints, nP
+        integer                                         :: jW, jE, iS, iN, i, j, KUB
+        logical                                         :: InsideDomain
+
+        !Begin----------------------------------------------------------------
+        
+        nPoints = size(X)
+        
+        KUB = Me%WorkSize3D%KUB
+        
+        call GetWaterPoints3D(Map_ID            = Me%ObjMap,                            &
+                              WaterPoints3D     = Me%ExternalVar%WaterPoints3D,         &
+                              STAT              = STAT_CALL) 
+        if (STAT_CALL/=SUCCESS_) stop 'Interpolate2DCloud3DMatrix - ModuleField4D - ERR10' 
+
+        if (PropField%Extrapolate) then        
+            call FillMatrix3D(Me%WorkSize3D%ILB,                             &
+                              Me%WorkSize3D%IUB,                             &
+                              Me%WorkSize3D%JLB,                             &
+                              Me%WorkSize3D%JUB,                             &
+                              Me%WorkSize3D%KLB,                             &
+                              Me%WorkSize3D%KUB,                             &
+                              Me%ExternalVar%Waterpoints3D,                  &
+                              Me%Matrix3D,                                   &
+                              FillGridMethod = PropField%ExtrapolateMethod)
+        endif         
+        
+dnP:    do nP = 1,nPoints      
+
+            if (NoData(nP)) then
+                InsideDomain = GetXYInsideDomain(Me%ObjHorizontalGrid, X(nP), Y(nP), STAT = STAT_CALL)
+                if (STAT_CALL /= SUCCESS_) stop 'Interpolate2DCloud3DMatrix - ModuleValida4D - ERR10'
+            
+                if (.not. InsideDomain) then
+                    cycle
+                endif
+                
+                call GetXYCellZ(Me%ObjHorizontalGrid, X(nP), Y(nP), i, j, PercI, PercJ, STAT = STAT_CALL)
+                if (STAT_CALL /= SUCCESS_) stop 'Interpolate2DCloud3DMatrix - ModuleValida4D - ERR20'
+                
+
+                if (PercJ > 0.5) then
+                    jW = j
+                    jE = j+1
+                    Xv = PercJ - 0.5
+                else
+                    jW = j-1
+                    jE = j
+                    Xv = PercJ + 0.5
+                endif
+                
+                if (PercI > 0.5) then
+                    iS = i
+                    iN = i+1
+                    Yv = PercI - 0.5
+                else
+                    iS = i-1
+                    iN = i
+                    Yv = PercI + 0.5
+                endif            
+                
+                X_W = 0.
+                X_E = 1
+                Y_S = 0.                
+                Y_N = 1.
+                
+                ValueSW     = Me%Matrix3D(iS, jW, KUB)
+                ValueSE     = Me%Matrix3D(iS, jE, KUB)
+                ValueNW     = Me%Matrix3D(iN, jW, KUB)
+                ValueNE     = Me%Matrix3D(iN, jE, KUB)
+                
+                MaskSW      = Me%ExternalVar%Waterpoints3D(iS, jW, KUB)
+                MaskSE      = Me%ExternalVar%Waterpoints3D(iS, jE, KUB)
+                MaskNW      = Me%ExternalVar%Waterpoints3D(iN, jW, KUB)
+                MaskNE      = Me%ExternalVar%Waterpoints3D(iN, jE, KUB)
+                
+
+                if (PropField%Extrapolate .or. .not. PropField%DiscardFillValues) then
+                
+                    NoData(nP) = .false.
+                
+                    if (ValueSW < FillValueReal/1e4) NoData(nP) = .true.
+                    if (ValueSE < FillValueReal/1e4) NoData(nP) = .true.
+                    if (ValueNW < FillValueReal/1e4) NoData(nP) = .true.
+                    if (ValueNE < FillValueReal/1e4) NoData(nP) = .true.
+                    
+                    if (.not.  NoData(nP)) then
+                    
+                    
+                        if (PropField%InterpolMethod == Bilinear2D_) then
+                
+                            ValueN      = LinearInterpolation (X_W, ValueNW, X_E, ValueNE, Xv)
+                            ValueS      = LinearInterpolation (X_W, ValueSW, X_E, ValueSE, Xv)
+                            
+                            Field(nP)   = LinearInterpolation (Y_S, ValueS, Y_N, ValueN, Yv)
+
+                        elseif (PropField%InterpolMethod == NearestNeighbor2D_) then
+                            if (Xv < 0.5) then
+                                if (Yv < 0.5) then
+                                     Field(nP) =  ValueSW                           
+                                else
+                                     Field(nP) =  ValueNW                                                           
+                                endif
+                            else
+                                if (Yv < 0.5) then
+                                     Field(nP) =  ValueSE                           
+                                else
+                                     Field(nP) =  ValueNE                                                           
+                                endif                            
+                            endif
+                        endif
+                        
+                    endif
+                    
+                else
+                
+                    if (ValueSW < FillValueReal/1e4) ValueSW = 0.
+                    if (ValueSE < FillValueReal/1e4) ValueSE = 0.                
+                    if (ValueNW < FillValueReal/1e4) ValueNW = 0.                
+                    if (ValueNE < FillValueReal/1e4) ValueNE = 0.     
+                    
+                    if (PropField%InterpolMethod == Bilinear2D_) then                                  
+                    
+                        if (MaskNW == WaterPoint .and. MaskNE == WaterPoint) then
+                            ValueN = LinearInterpolation (X_W, ValueNW, X_E, ValueNE, Xv)
+                            MaskN  = 1
+                        elseif (MaskNW == WaterPoint) then
+                            ValueN = ValueNW
+                            MaskN  = 1
+                        elseif (MaskNE == WaterPoint) then
+                            ValueN = ValueNE
+                            MaskN  = 1
+                        else
+                            MaskN  = 0
+                        endif
+
+                        if (MaskSW == WaterPoint .and. MaskSE == WaterPoint) then
+                            ValueS = LinearInterpolation (X_W, ValueSW, X_E, ValueSE, Xv)
+                            MaskS  = 1
+                        elseif (MaskSW == WaterPoint) then
+                            ValueS = ValueSW
+                            MaskS  = 1
+                        elseif (MaskSE == WaterPoint) then
+                            ValueS = ValueSE
+                            MaskS  = 1
+                        else
+                            MaskS  = 0
+                        endif
+                        
+                        NoData(nP) = .false. 
+                        
+                        if (MaskN == WaterPoint .and. MaskS == WaterPoint) then
+                            Field(nP) = LinearInterpolation (Y_S, ValueS, Y_N, ValueN, Yv)
+                        else if (MaskN == WaterPoint) then
+                            Field(nP) = ValueN
+                        else if (MaskS == WaterPoint) then
+                            Field(nP) = ValueS
+                        else
+                            Field(nP)  = FillValueReal
+                            NoData(nP) = .true. 
+                        endif
+                        
+                    elseif (PropField%InterpolMethod == NearestNeighbor2D_) then
+
+                        if (MaskNW == WaterPoint .and. MaskNE == WaterPoint) then
+                            if (Xv < 0.5) then
+                                ValueN = ValueNW
+                             else
+                                ValueN = ValueNE
+                             endif
+                            MaskN  = 1
+                        elseif (MaskNW == WaterPoint) then
+                            ValueN = ValueNW
+                            MaskN  = 1
+                        elseif (MaskNE == WaterPoint) then
+                            ValueN = ValueNE
+                            MaskN  = 1
+                        else
+                            MaskN  = 0
+                        endif
+
+                        if (MaskSW == WaterPoint .and. MaskSE == WaterPoint) then
+                            if (Xv < 0.5) then
+                                ValueS = ValueSW
+                             else
+                                ValueS = ValueSE
+                             endif                            
+                            MaskS  = 1
+                        elseif (MaskSW == WaterPoint) then
+                            ValueS = ValueSW
+                            MaskS  = 1
+                        elseif (MaskSE == WaterPoint) then
+                            ValueS = ValueSE
+                            MaskS  = 1
+                        else
+                            MaskS  = 0
+                        endif
+                        
+                        NoData(nP) = .false. 
+                        
+                        if (MaskN == WaterPoint .and. MaskS == WaterPoint) then
+                            if (Yv < 0.5) then
+                                Field(nP) = ValueS
+                            else
+                                Field(nP) = ValueN
+                            endif
+                        else if (MaskN == WaterPoint) then
+                            Field(nP) = ValueN
+                        else if (MaskS == WaterPoint) then
+                            Field(nP) = ValueS
+                        else
+                            Field(nP)  = FillValueReal
+                            NoData(nP) = .true. 
+                        endif
+
+                    
+                    endif                        
+                    
+                endif                
+                
+            endif
+                            
+        enddo dnP            
+
+        call UnGetMap(Map_ID          = Me%ObjMap,                                      &
+                      Array           = Me%ExternalVar%WaterPoints3D,                   &
+                      STAT            = STAT_CALL) 
+
+        if (STAT_CALL/=SUCCESS_) stop 'Interpolate2DCloud3DMatrix - ModuleField4D - ERR30' 
+
+
+
+    end subroutine Interpolate2DCloud3DMatrix    
 
     !----------------------------------------------------------------------
 
