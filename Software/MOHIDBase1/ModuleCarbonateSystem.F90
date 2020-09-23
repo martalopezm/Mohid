@@ -1,0 +1,1418 @@
+!------------------------------------------------------------------------------
+!        IST/MARETEC, Water Modelling Group, Mohid modelling system
+!------------------------------------------------------------------------------
+!
+! TITLE         : Mohid Model
+! PROJECT       : Mohid Base 1
+! MODULE        : Carbonate System
+! URL           : http://www.mohid.com
+! AFFILIATION   : IST/MARETEC, Marine Modelling Group
+! DATE          : Feb 2020
+! REVISION      : Marta López Mozos - v1.0
+! DESCRIPTION   : Zero-dimensional model for marine carbonate system                  
+!                 
+!------------------------------------------------------------------------------
+!
+!  This program is free software; you can redistribute it and/or
+!  modify it under the terms of the GNU General Public License 
+!  version 2, as published by the Free Software Foundation.
+!
+!  This program is distributed in the hope that it will be useful,
+!  but WITHOUT ANY WARRANTY; without even the implied warranty of
+!  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+!  GNU General Public License for more details.
+!
+! You should have received a copy of the GNU General Public License
+! along with this program; if not, write to the Free Software
+! Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+!    
+!******************************************************************************************************
+!                             MODULE EXTENDED DESCRIPTION
+!******************************************************************************************************
+!         
+!      The carbonate system module calculates the alkalinity and the dissolved organic carbon 
+!      to compute, along with other provided properties, the pH and the rest of the carbonate 
+!      system parameters.
+!    
+!      Alkalinity and DIC variables are calculated by other MOHID modules outputs, while the rest of the carbonate 
+!      system parameters are calculated through mocsy package (Orr et al., 2018)(https://github.com/jamesorr/mocsy), 
+!      which is coupled to MOHID inside this module. 
+!     
+!      Two options to compute alkalinity are allowed (marta:explicar!!).
+!      
+!      
+!      The module follows others MOHID's modules statements structure: 
+!      
+!       -  Privacity of subroutines (list of all subroutines contained in the module)
+!       -  Declaration: parameters, types and global module variables
+!       -  Constructor: first part of the module to be called. Prepares all to be ready for the calculation;
+!                       data files are read and arrays are created, allocated and initialized
+!       -  Selector   : allows other modules to get parameters and variables values from  this module
+!       -  Modifier   : perform calculations; called each time step  and is resposible for updating the
+!                       arrays for the new time step.     
+!       -  Destructor : where all the matrixes are deallocated and connections between modules destroyed
+!       -  Management    
+!      
+!      
+!        Following the MOHID structure, this biogeochemical module is dimensionless, this is: 
+!        When the property value arrives to the biogeochem. module, it has already experience physical phenomena  
+!        (as adv-diffusion processes) and only remains the sink and sources component of change, that will be 
+!        computed in the biogchm. module. 
+!        The interface module (which links between the waterproperties module and the biogeochemical modules)
+!        converts the 3D, 2D or 1D properties arrays (from water properties) to 1D arrays for biogeochemical 
+!        modules. After that, the changes in the property value, due to biogeochemical processes (sink-sources)         
+!        are computed in the biogeochem. module. The resulting 1D array is send back to interface, where 
+!        is converted to 3D, 2D or 1D properties arrays and send to waterproperties for the next step.   
+!  
+!******************************************************************************************************
+!      IMPLEMENTATION:       CARBONATESYSTEM.DAT FILE EXAMPLE EXTENDED
+!******************************************************************************************************
+!
+!  !---keyword----------------- units ----------------default value--------------description
+!
+!   ALK_parametrized      Compute option type         .true.  [1]       !Compute alkalinity by salinity parametrization 
+!   ALK_biology           Compute option type         .false. [0]       !Compute changes in alkalinity due biological activity
+!   DIC_calc              Compute option type         .false. [0]       !Compute DIC taking into account CaCO3 dissol/precip
+!   DIC_no_calc           Compute option type         .true.  [0]       !Compute DIC withou taking into account CaCO3 dissol/preci
+!   DT                        seconds                     3600.         !Time step between two module calls
+!   PELAGIC_MODEL         Compute option type              -            !Pelagic model used to do calculations.Options: WaterQuality
+!   REDFIELD_NC             mol N (mol C -1)             16./122.       !Nitrogen to Carbon Redfield ratio            | or LifeModel
+! 
+!   
+!  Example| Example of CarbonateSystem_1.dat for the user:
+!  Example|  
+!  Example|      DT: 3600.
+!  Example|      REDFIELD_NC: 16./122.
+!  Example|
+!  Example| !Alkalinity compute options. Note that you can't use both methods at the same time
+!  Example|      ALK_parametrized          : 0
+!  Example|      ALK_biology               : 1
+!  Example|    
+!  Example| !DIC compute options. Note that you can't use both methods at the same time
+!  Example|      DIC_calc                  : 0
+!  Example|      DIC_no_calc               : 1   
+!  Example|    
+!  Example| !Pelagic model compute option. Note that you can only use one. 
+!  Example|      PELAGIC_MODEL             : WaterQuality (or LifeModel)
+    
+
+!*************************************************************************************************
+!     IMPLEMENTATION:      WATERPROPERTIES.DAT FILE WITH CARBONATE SYSTEM VARIABLES
+!*************************************************************************************************      
+!    On the WaterProperties.dat file (implementation file) you should add properties blocks with part 
+!    of the following properties. Remember, for alkalinity only one property placed below can be added
+!    (as for DIC). Remember setting by one the keyword CARBSYST  : 1  (look at the example below).  
+!    
+!     
+!     'parametrized alkalinity CS'             |ALK_cs_p  = Alkalinity  ( umol / kgSW )
+!     'biological alkalinity CS'               |ALK_cs_b  = Alkalinity  ( umol / kgSW )
+!     'dissolved inorganic carbon CS calc'     |DIC_cs_c  = Dissolved Inorganic Carbon concentration, calcification 
+!     'dissolved inorganic carbon CS nocalc'   |DIC_cs_nc = Dissolved Inorganic Carbon concentration, no calcification 
+!                                                                ( umolC  / kgSW ) | (mg C m-3)
+!    
+!    
+!
+!    
+! Example| Example of WaterProperties.dat with a carbonate system variable:
+!    
+! Example| <beginproperty>
+! Example| NAME                         : parametrized alkalinity CS!Property name 
+! Example| UNITS                        : umol/kgSW                 !Property units
+! Example| DESCRIPTION                  : alkalinity                !Small description of the property
+! Example| INITIALIZATION_METHOD        : CONSTANT                  !Initialization of concentration values. See module FillMatrix
+! Example| PARTICULATE                  : 0                         !Property physical state: 0 - Dissolved ; 1 - Particulate
+! Example| OLD                          : 0                         !Initialization from previous run (overrides FillMatrix)
+! Example| IS_COEF                      : .001                      !Conversion factor to I.S. units (1e-3 = mg/l)
+! Example| DEFAULTVALUE                 : 2400                      !Value assumed by default
+! Example| DEFAULTBOUNDARY              : 2400                      !Value assumed in open boundaries by default
+! Example| BOUNDARY_INITIALIZATION      : INTERIOR                  !Type of boundary initialization: INTERIOR or EXTERIOR
+! Example| ADVECTION_DIFFUSION          : 1                         !Compute advection-diffusion
+! Example| 	BOUNDARY_CONDITION          : 5                         !See modules WaterProperties and Hydrodynamics
+! Example| 	ADV_METHOD_H                : 1                         !See modules WaterProperties and Hydrodynamics
+! Example| 	ADV_METHOD_V                : 1                         !See modules WaterProperties and Hydrodynamics
+! Example|     ADVECTION_V_IMP_EXP      : 0                         !See modules WaterProperties and Hydrodynamics
+! Example| 	ADVECTION_H_IMP_EXP         : 1                         !See modules WaterProperties and Hydrodynamics  	
+! Example| SUBMODEL                     : 0                         !Property is influenced by a father model 
+! Example| 	SUBMODEL_INI                : 0                         !Property is initialized as being part of a sub model                         
+! Example| PARTITION                    : 0						    !Name of the property (oposite phase) to compute partition
+! Example| WATER_QUALITY                : 0                         !Compute water quality processes (OFF = 0)
+! Example| CARBSYST                     : 1                         !Compute CARBonate SYSTem processes (ON = 1)
+! Example| SURFACE_FLUXES               : 0                         !Compute fluxes from water-air interface (always 0 for alkal.)
+! Example| BOTTOM_FLUXES                : 0                         !Compute fluxes from sediment-water interface (0 for alkalinity)
+! Example| DISCHARGES                   : 0							!Compute discharges (WWTP, river, etc)
+! Example| 	DISCHARGES_TRACKING         : 0							!Monitor discharges with outputing a time serie 
+! Example| VERTICAL_MOVEMENT            : 0							!Compute vertical movement due to settling velocity
+! Example| DATA_ASSIMILATION            : 1							!Add nudging term
+! Example| TIME_SERIE                   : 0                         !Ouputs results in time series
+! Example| BOX_TIME_SERIE               : 0                         !Ouputs results in box time series
+! Example| OUTPUT_HDF                   : 1                         !Ouputs results in HDF5 format
+! Example| OUTPUT_SURFACE_HDF           : 0                         !Ouputs results in HDF5 format
+! Example| STATISTICS                   : 0                         !Perform statistics for property concentration
+! Example| 	STATISTICS_FILE             : C:\...\STATISTICS_alkalinity.dat
+! Example| <endproperty>  
+    
+!*************************************************************************************************
+!*************************************************************************************************   
+          
+ Module ModuleCarbonateSystem
+    
+      use ModuleGlobalData
+      use ModuleEnterData      
+      use ModuleTime
+      
+      implicit none            
+      private      
+            
+!******************************************************************************
+!                            SUBROUTINES 
+!******************************************************************************
+      
+     !Constructor      
+      public  :: ConstructCarbonateSystem              !Model preparation-construction
+      private ::      AllocateInstance                 !Instance allocation
+      private ::      ReadData                         !Calling of reading subroutines
+      private ::          ConstructGlobalVariables     !Parameters, keywords in the .dat file
+      private ::          ConstructModelOptions        !Calculation option, keywords in the .dat file
+      private ::      PropertyIndexNumber
+      private ::      ConstructPropertyList  
+  
+      
+     !Selector          
+      public  :: GetDTCarbonateSystem 
+      public  :: GetCarbonateSystemPropertyList
+      public  :: GetCarbonateSystemSize
+      public  :: GetCarbonateSystemPropIndex
+      public  :: UnGetCarbonateSystem
+    
+    !Modifier         
+      public  :: ModifyCarbonateSystem                 !Model calculations
+      private :: CS_computations
+      private :: ComputeAlkalinity_param
+      private :: ComputeAlkalinity_bio
+      !private :: ComputeDIC_calc
+      !private :: ComputeDIC_no_calc
+      !private :: Computemocsy
+      !private ::   Computemocsy_1_
+    
+    !Destructor        
+      public  :: KillCarbonateSystem   
+      private :: DeAllocateInstance
+    
+    !Management     
+      private :: Ready
+      private :: LocateObjCarbonateSystem
+
+ 
+    
+!*******************************************************************************************
+!                              DECLARATION STATEMENTS
+!*******************************************************************************************     
+! ------ Types, variables, parameters 
+
+    private :: T_AuxiliarParameters
+    type       T_AuxiliarParameters       
+        real                            :: C_AtomicMass          = 12                   !mgC/molC
+        real                            :: H_AtomicMass          = 1                    !mgH/molH
+        real                            :: O_AtomicMass          = 16                   !mgO/molO
+        real                            :: N_AtomicMass          = 14                   !mgN/molN
+        real                            :: P_AtomicMass          = 31                   !mgP/molP
+    end type T_AuxiliarParameters
+
+
+    private :: T_BioChemParam
+    type       T_BioChemParam   
+        real                            :: Redfield_NC            = null_real           !Redfield N:C ratio
+    !    real                            :: Redfield_PC            = null_real          !Redfield P:C ratio
+    !    real                            :: Redfield_SiC           = null_real          !Standard Si:C ratio
+    !    real                            :: BioSi_Diss             = null_real          !Biogenic silica dissolution rate
+    !    real                            :: O2C_Conversion         = null_real          !Oxygen to carbon conversion factor
+    !    real                            :: CO2C_Conversion        = null_real          !Carbon Dioxide to carbon conversion factor
+    end type T_BioChemParam
+
+
+    private :: T_ComputeOptions
+    type       T_ComputeOptions
+        logical                         :: NoBiologicalAlkalinity    = .true.          !Compute alkalinity by salinity
+        logical                         :: BiologicalAlkalinity      = .false.         !Compute biological alkalinity 
+        logical                         :: DIC_calcification         = .false.         !Compute DIC with calcif/dissolution
+        logical                         :: DIC_no_calcification      = .true.          !Compute DIC without calcif/dissolu
+        character(len=StringLength)     :: PelagicModel              = null_str        !Pelagic model to use outputs
+    end type T_ComputeOptions 
+    
+    
+    private :: T_PropIndex                         
+    type     T_PropIndex                                                 ! CarbonateSystem module index, not global data index!
+        integer                         :: ALK_cs_p         = null_int   ! Alkalinity computed by algorithm 
+        integer                         :: ALK_cs_b         = null_int   ! Alkalinity computed by biological changes 
+        integer                         :: DIC_cs_c         = null_int   ! Dissolved inorganic carbon concentration (calcifi) 
+        integer                         :: DIC_cs_nc        = null_int   ! Dissolved inorganic carbon concentration (no calc) 
+    end type T_PropIndex       
+      
+    
+    private :: T_ID
+    type       T_ID         
+        integer                         :: ID, IDNumber             = null_int
+        character(len=StringLength)     :: Name                     = null_str
+        character(len=StringLength)     :: Description              = null_str
+    end type T_ID  
+
+
+   private ::  T_ExternalVar                
+    type       T_ExternalVar              !Output variables from other modules needed as input information for this one 
+        real, pointer, dimension(:  )       :: Salinity      !Salinity        1D array. Origin: WaterPropertiesModule
+        real, pointer, dimension(:  )       :: Temperature   !Temperature     1D array. Origin: WaterPropertiesModule
+        real, pointer, dimension(:  )       :: Thickness     !Cell? thickness 1D array. Origin: GeometryModule,original name DWZ
+        real, pointer, dimension(:,:)       :: Mass          !Property mass   2D array. Origin: WaterPropertiesModule
+        real, pointer, dimension(:  )       :: Latitude      !Latitude        1D array. Origin: HorizontalGridModule
+        real, pointer, dimension(:  )       :: Longitude     !Longitude       1D array. Origin: HorizontalGridModule       
+        integer, pointer, dimension(:  )    :: OpenPoints    !Grid points with water where perform calculations. Origin: MapModule              
+      end type T_ExternalVar             !Latitude and latitude are geographic coordenates in decimal format
+                                         !Latitude, Longitude, Thickness and OpenPoints are gotten by WaterPropertiesModule
+
+
+     private :: T_CarbonateSystem
+     type       T_CarbonateSystem
+        integer                                         :: InstanceID
+        integer                                         :: ObjEnterData         = 0
+        integer, dimension(:), pointer                  :: PropertyList         => null()
+        real                                            :: DT
+        real                                            :: DT_day
+        type(T_AuxiliarParameters)                      :: AuxParam
+        type(T_BioChemParam      )                      :: BioChemParam
+        type(T_ComputeOptions    )                      :: ComputeOptions
+        type(T_ExternalVar       )                      :: ExternalVar
+        type(T_Size1D            )                      :: Array
+        type(T_Size1D            )                      :: Prop
+        type(T_PropIndex         )                      :: PropIndex
+        type(T_CarbonateSystem   ), pointer             :: Next
+      end type T_CarbonateSystem
+                                                      
+ ! ------ Global Module Variables ----------------------   
+      
+       type (T_CarbonateSystem), pointer                        :: FirstObjCarbonateSystem  => null()
+       type (T_CarbonateSystem), pointer                        :: Me                       => null()
+      
+    contains
+
+!++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+!++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+!CONSTRUCTOR CONSTRUCTOR CONSTRUCTOR CONSTRUCTOR CONSTRUCTOR CONSTRUCTOR CONS
+
+!++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+!++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++   
+    
+
+!>@author: Marta López, Maretec
+!>@Brief: Register this module, allocates instance, calls the subroutines 
+!>which read the information to construct the module (from the .datfile), 
+!>gives an index to properties that will be calculated in the module (maybe 
+!>activated by the user or necessary for the module; the index is different 
+!>from the one in globaldata) and construct the PropertyList with them.     
+!>@param[in]  FileName
+!::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+  subroutine ConstructCarbonateSystem(ObjCarbonateSystemID, FileName, STAT)
+    
+     !Arguments---------------------------------------------------------------
+       integer                        :: ObjCarbonateSystemID      
+       character(len=*) , intent(IN)  :: FileName !path to carbonatesystem.dat file
+       integer, optional, intent(OUT) :: STAT
+     !External----------------------------------------------------------------
+       integer                                 :: ready_, STAT_CALL
+     !Local------------------------------------------------------------------
+       integer                                 :: STAT_
+     !------------------------------------------------------------------------
+
+        STAT_ = UNKNOWN_
+        
+        !Assures nullification of the global variable
+        if (.not. ModuleIsRegistered(mCarbonateSystem_)) then
+          nullify (FirstObjCarbonateSystem)
+          call RegisterModule (mCarbonateSystem_)         
+        endif        
+        !Call Ready, which is placed on the management block 
+        call Ready(ObjCarbonateSystemID, ready_)
+        !If ready_, which is the return of the sbrtine Ready, is equal to OFF_ERR_, call the following 
+        !subroutines, placed below        
+cd0 : if (ready_ .EQ. OFF_ERR_) then
+
+          call AllocateInstance
+          call ConstructEnterData(Me%ObjEnterData, FileName, STAT = STAT_CALL) 
+            if (STAT_CALL .NE. SUCCESS_) stop 'ConstructCarbonateSystem - ModuleCarbonateSystem - ERROR #1'
+          call ReadData
+          call PropertyIndexNumber
+          call ConstructPropertyList
+          call KillEnterData(Me%ObjEnterData,STAT = STAT_CALL)   
+            if (STAT_CALL .NE. SUCCESS_) stop 'ConstructCarbonateSystem - ModuleCarbonateSystem - ERROR #2'
+        
+        !Returns ID 
+          ObjCarbonateSystemID     = Me%InstanceID
+          STAT_ = SUCCESS_
+      else 
+          stop 'ModuleCarbonateSystem - ConstructCarbonateSystem - ERROR #1'
+      end if cd0
+    
+      ! If the optional argument STAT is present in this subroutine (so, the function present returns 
+      ! true) assign to STAT_ (previously assigned as SUCCES_ as STAT to 
+        if (present(STAT)) STAT = STAT_   
+        
+  !---------------------------------------------------------------------------               
+  end subroutine ConstructCarbonateSystem
+  !::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+  
+  
+  
+  !>@author: Marta López, Maretec
+  !>@Brief: Allocates instance 
+  !::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+   subroutine AllocateInstance
+   
+  !Local---------------------------------------------------------------------
+        type (T_CarbonateSystem), pointer      :: NewObjCarbonateSystem
+        type (T_CarbonateSystem), pointer      :: PreviousObjCarbonateSystem
+  !---------------------------------------------------------------------------
+   !Allocates new instance
+        allocate (NewObjCarbonateSystem)
+        nullify  (NewObjCarbonateSystem%Next)
+
+   !Insert New Instance into list and makes Current point to it
+        if (.not. associated(FirstObjCarbonateSystem)) then
+            FirstObjCarbonateSystem         => NewObjCarbonateSystem
+            Me                              => NewObjCarbonateSystem
+        else
+            PreviousObjCarbonateSystem      => FirstObjCarbonateSystem
+            Me                              => FirstObjCarbonateSystem%Next
+            do while (associated(Me))
+                PreviousObjCarbonateSystem  => Me
+                Me                          => Me%Next
+            enddo
+            Me                              => NewObjCarbonateSystem
+            PreviousObjCarbonateSystem%Next => NewObjCarbonateSystem
+        endif
+
+        Me%InstanceID = RegisterNewInstance (mCarbonateSystem_)
+  !---------------------------------------------------------------------------
+   end subroutine AllocateInstance
+  !::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+  
+   
+  
+ !>@author: Marta López, Maretec
+ !>@Brief: Calls the subroutines that read and set the info to construct the 
+ !>module (from the carbonatesystem.dat file reads keywords and values; if not
+ !present/necessary, sets the default value).   
+ !::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::  
+   subroutine ReadData  
+  !---------------------------------------------------------------------------
+    call ConstructGlobalVariables
+    call ConstructModelOptions
+    !call ConstructCO2SYS_mocsy
+  !---------------------------------------------------------------------------
+   end subroutine ReadData
+  !::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+  
+   
+  
+  !>@author: Marta López, Maretec
+  !>@Brief: Sets model parameters and their keywords. Through CS.dat 
+  !>file this configuration can be changed by the user.   
+  !:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::: 
+ 
+   subroutine ConstructGlobalVariables
+
+     !Arguments----------------------------------------------------------------        
+        !External--------------------------------------------------------------
+        integer                                         :: iflag, STAT_CALL        
+        !Local-----------------------------------------------------------------
+        integer                                         :: FromFile 
+        !Begin-----------------------------------------------------------------
+
+        call GetExtractType    (FromFile = FromFile)
+        
+        !DTSecond, time step, in seconds, between 2 module calls (seconds) 
+        call GetData(Me%DT,                                           &
+                     Me%ObjEnterData, iflag,                          &
+                     SearchType   = FromFile,                         &
+                     keyword      = 'DT',                             &
+                     Default      = 3600.,                            &
+                     ClientModule = 'ModuleCarbonateSystem',          &
+                     STAT         = STAT_CALL)
+        if (STAT_CALL .NE. SUCCESS_) stop 'ConstructGlobalVariables - ModuleCarbonateSystem - ERROR #1'
+
+        !For compatibility with the rest of the program,  DT [sec] converted to DT [day]
+        Me%DT_day      = Me%DT / (3600.*24.)
+        
+        !Nitrogen to Carbon Redfield ratio ( mol N / mol C )
+        call GetData(Me%BioChemParam%Redfield_NC,                     &
+                     Me%ObjEnterData, iflag,                          &
+                     SearchType   = FromFile,                         &
+                     keyword      = 'REDFIELD_NC',                    &
+                     Default      = 16./122.,                         &
+                     ClientModule = 'ModuleCarbonateSystem',          &
+                     STAT         = STAT_CALL)
+        if (STAT_CALL .NE. SUCCESS_) stop 'ConstructGlobalVariables - ModuleCarbonateSystem - ERROR #2'
+  !---------------------------------------------------------------------------  
+   end subroutine ConstructGlobalVariables
+  !::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+   
+  
+
+  !>@author: Marta López, Maretec
+  !>@Brief: Sets module calculation options and their keywords. Through CS.dat 
+  !>file this configuration can be changed by the user.
+  !::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+  
+   subroutine ConstructModelOptions
+  
+  !Arguments-------------------------------------------------------------------        
+     !External---------------------------------------------------------------
+        integer                                         :: iflag, STAT_CALL
+        integer                                         :: iflag1, iflag2
+        integer                                         :: iflag3, iflag4
+      !Local-----------------------------------------------------------------
+        integer                                         :: FromFile 
+      !----------------------------------------------------------------------
+
+        call GetExtractType    (FromFile = FromFile)
+        
+        !ALKALINITY
+        !Calculation option: compute alkalinity by salinity parametrization        
+        call GetData(Me%ComputeOptions%NoBiologicalAlkalinity,        &
+                     Me%ObjEnterData, iflag1,                         &
+                     SearchType   = FromFile,                         &
+                     keyword      = 'ALK_parametrized ',              &
+                     Default      = .false.,                          &
+                     ClientModule = 'ModuleCarbonateSystem',          &
+                     STAT         = STAT_CALL)
+        if (STAT_CALL .NE. SUCCESS_) stop 'ConstructModelOptions - ModuleCarbonateSystem - ERROR #1'        
+        if(Me%ComputeOptions%NoBiologicalAlkalinity) then
+            write(*,*)'WARNING: Alkalinity parametrization through salinity should be used only for'
+            write(*,*)'surface water cases of study. Be careful'
+        endif
+        
+        !Calculation option: compute changes on alkalinity by biological interactions
+        call GetData(Me%ComputeOptions%BiologicalAlkalinity,           &
+                     Me%ObjEnterData, iflag2,                          &
+                     SearchType   = FromFile,                          &
+                     keyword      = 'ALK_biology ',                    &
+                     Default      = .false.,                           &
+                     ClientModule = 'ModuleCarbonateSystem',           &
+                     STAT         = STAT_CALL)
+        if (STAT_CALL .NE. SUCCESS_) stop 'ConstructModelOptions - ModuleCarbonateSystem - ERROR #2'        
+  
+        !Verification if alkalinity calculation option is correctly activated  
+        if((iflag1==0) .and. (iflag2==0)) then
+            write(*,*)'Please define an alkalinity calculation option. Choose one:ALK_parametrized or'
+            write(*,*)'ALK_biology in the carbonatesystem.dat file '
+            stop 'ConstructModelOptions - ModuleCarbonateSystem - ERROR #V1a'
+        end if         
+        
+        if(Me%ComputeOptions%NoBiologicalAlkalinity .and. Me%ComputeOptions%BiologicalAlkalinity) then
+          write(*,*)' You cannot activate two alkalinity calculation options.Choose one:ALK_parametrized or'
+          write(*,*)' ALK_biology. Please, check it in the carbonatesystem.dat file ' 
+            stop 'ConstructModelOptions - ModuleCarbonateSystem - ERROR #V1b' 
+        endif    
+        
+        !DIC
+        !Calculation option: compute DIC taking into account calcification/dissolut processes
+        call GetData(Me%ComputeOptions%DIC_calcification,             &
+                     Me%ObjEnterData, iflag3,                          &
+                     SearchType   = FromFile,                         &
+                     keyword      = 'DIC_calc ',                      &
+                     Default      = .false.,                          &
+                     ClientModule = 'ModuleCarbonateSystem',          &
+                     STAT         = STAT_CALL)
+        if (STAT_CALL .NE. SUCCESS_) stop 'ConstructModelOptions - ModuleCarbonateSystem - ERROR #3'
+        
+        !Calculation option: compute DIC without taking into account calcification/dissolut proc.
+        call GetData(Me%ComputeOptions%DIC_no_calcification,          &
+                     Me%ObjEnterData, iflag4,                          &
+                     SearchType   = FromFile,                         &
+                     keyword      = 'DIC_no_calc ',                   &
+                     Default      = .false.,                           &
+                     ClientModule = 'ModuleCarbonateSystem',          &
+                     STAT         = STAT_CALL)
+        if (STAT_CALL .NE. SUCCESS_) stop 'ConstructModelOptions - ModuleCarbonateSystem - ERROR #4'
+        
+        !Verification if DIC calculation option is correctly activated  
+        if((iflag3==0) .and. (iflag4==0)) then
+            write(*,*)'Please define a DIC calculation option. Choose one: DIC_calc or'
+            write(*,*)'DIC_no_calc in the carbonatesystem.dat file '
+            stop 'ConstructModelOptions - ModuleCarbonateSystem - ERROR #V2a'
+        end if  
+        
+        if(Me%ComputeOptions%NoBiologicalAlkalinity .and. Me%ComputeOptions%BiologicalAlkalinity) then
+          write(*,*)' You cannot activate two DIC calculation options. Choose one: DIC_calc or'
+          write(*,*)' DIC_no_calc. Please, check it in the carbonatesystem.dat file ' 
+            stop 'ConstructModelOptions - ModuleCarbonateSystem - ERROR #V2b'             
+        endif
+        
+        !PELAGIC MODEL
+        !Pelagic model that is going to be used
+        call GetData(Me%ComputeOptions%PelagicModel,                   &
+                    Me%ObjEnterData,  iflag,                            &
+                    SearchType   = FromFile,                           &
+                    keyword      = 'PELAGIC_MODEL',                    &
+                    ClientModule = 'ModuleCarbonateSystem',            &
+                    STAT         = STAT_CALL)
+        if (STAT_CALL .NE. SUCCESS_) stop 'ConstructModelOptions - ModuleCarbonateSystem - ERROR #5'
+
+        !Verification if pelagic model option is correctly activated
+        if(iflag==0)then
+            write(*,*)'Please define the pelagic model to couple with ModuleCarbonateSystem'
+            stop 'ConstructModelOptions - ModuleCarbonateSystem - ERROR #6'
+        end if 
+
+       if((Me%ComputeOptions%PelagicModel .ne. WaterQualityModel .and. Me%ComputeOptions%PelagicModel .ne. 'LifeModel'))then
+            write(*,*)'Pelagic model to couple with ModuleCarbonateSystem must be one of the following:'
+            write(*,*)trim(WaterQualityModel)
+            write(*,*)trim(LifeModel)
+            stop 'ConstructModelOptions - ModuleCarbonateSystem - ERROR #7'
+       end if      
+       
+  !----------------------------------------------------------------------    
+   end subroutine ConstructModelOptions 
+  !::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+  
+  
+  
+  !> @author: Marta López, Maretec
+  !> @Brief: Gives an index, different form the one given in globaldata!, to the 
+  !> properties that are going to be calculated in the module. The minimun number of 
+  !> properties for this module is two, and the maximun is !@martaaaaa. The index number
+  !> will depend on the order in which the subroutine is written: alkalinity will always
+  !> have an propindex of 1, because just one type of it can be calculated and it is the
+  !> first property written below.
+  !::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::  
+  
+   subroutine PropertyIndexNumber  
+  !----------------------------------------------------------------------------
+   
+        Me%Prop%ILB = 1
+        Me%Prop%IUB = 0
+ 
+        !Alkalinity
+        if(Me%ComputeOptions%NoBiologicalAlkalinity) then
+            Me%Prop%IUB                      = Me%Prop%IUB + 1
+            Me%PropIndex%ALK_cs_p            = Me%Prop%IUB
+        endif
+        
+        if(Me%ComputeOptions%BiologicalAlkalinity)   then
+            Me%Prop%IUB                      = Me%Prop%IUB + 1
+            Me%PropIndex%ALK_cs_b            = Me%Prop%IUB
+        endif  
+        
+        !DIC 
+        if(Me%ComputeOptions%DIC_no_calcification)    then
+            Me%Prop%IUB                      = Me%Prop%IUB + 1
+            Me%PropIndex%DIC_cs_nc           = Me%Prop%IUB
+        endif     
+        
+        if(Me%ComputeOptions%DIC_calcification)       then
+            Me%Prop%IUB                      = Me%Prop%IUB + 1
+            Me%PropIndex%DIC_cs_c            = Me%Prop%IUB
+        endif  
+        
+  !---------------------------------------------------------------------- 
+   end subroutine PropertyIndexNumber  
+  !:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::: 
+  
+   
+   
+  !> @author: Marta López, Maretec
+  !> @Brief: Allocates PropertyList(1D) with max dimension until the number of 
+  !> properties that are going to be calculated in this module and stores the
+  !> global data property index (not the index given in the module!)
+  !::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+  
+   subroutine ConstructPropertyList
+
+   !Arguments-------------------------------------------------------------     
+        
+        allocate(Me%PropertyList(Me%Prop%ILB: Me%Prop%IUB))        
+                
+        if(Me%ComputeOptions%NoBiologicalAlkalinity) then
+        Me%PropertyList(Me%PropIndex%ALK_cs_p )   = ALK_cs_p_
+        endif      
+        
+        if(Me%ComputeOptions%BiologicalAlkalinity)   then
+        Me%PropertyList(Me%PropIndex%ALK_cs_b )   = ALK_cs_b_
+        endif
+        
+        if(Me%ComputeOptions%DIC_no_calcification)   then
+        Me%PropertyList(Me%PropIndex%DIC_cs_nc)   = DIC_cs_nc_
+        endif
+        
+        if(Me%ComputeOptions%DIC_calcification)      then
+        Me%PropertyList(Me%PropIndex%DIC_cs_c )   = DIC_cs_c_
+        endif
+        
+  !---------------------------------------------------------------------- 
+   end subroutine ConstructPropertyList  
+  !::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+  
+    
+
+   
+   !++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+   !++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+   !SELECTOR SELECTOR SELECTOR SELECTOR SELECTOR SELECTOR SELECTOR SELECTOR SE
+
+   !++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+   !++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  
+   !> @author: Marta López, Maretec
+   !> @Brief: Sends the CarbonateSysteMmodule time step and daily time step 
+   !> to the module that need it (InterfaceModule)
+   !::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::: 
+  
+   subroutine GetDTCarbonateSystem(CarbonateSystem_ID, DTDay, DT, STAT)
+   
+        !Arguments-------------------------------------------------------------
+        integer                             :: CarbonateSystem_ID
+        real,    optional, intent(OUT)      :: DTDay
+        real,    optional, intent(OUT)      :: DT
+        integer, optional, intent(OUT)      :: STAT
+        !External--------------------------------------------------------------
+        integer                             :: ready_    
+        !Local-----------------------------------------------------------------
+        integer                             :: STAT_
+        !----------------------------------------------------------------------
+        STAT_ = UNKNOWN_
+
+        call Ready(CarbonateSystem_ID, ready_)    
+        
+cd1 :   if ((ready_ .EQ. IDLE_ERR_     ) .OR.                                 &
+            (ready_ .EQ. READ_LOCK_ERR_)) then
+            if (present(DTDay   )) DTDay    = Me%DT_Day
+            if (present(DT)) DT             = Me%DT
+            STAT_ = SUCCESS_
+        else 
+            STAT_ = ready_
+        end if cd1
+
+        if (present(STAT))STAT = STAT_
+    !----------------------------------------------------------------------
+   end subroutine GetDTCarbonateSystem
+   !:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+   
+   !> @author: Marta López, Maretec
+   !> @Brief: Sends the number of properties that are going to be calculated in
+   !> this module, during an specific simulation, to the module that need it
+   !> (which is the interface module). 
+   !:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+   
+   subroutine GetCarbonateSystemSize(CarbonateSystem_ID, PropLB, PropUB, STAT)
+
+        !Arguments-------------------------------------------------------------
+        integer                             :: CarbonateSystem_ID
+        integer, optional, intent(OUT)      :: PropLB,PropUB
+        integer, optional, intent(OUT)      :: STAT
+        !External--------------------------------------------------------------
+        integer                             :: ready_             
+        !Local-----------------------------------------------------------------
+        integer                             :: STAT_
+        !----------------------------------------------------------------------
+        STAT_ = UNKNOWN_
+
+        call Ready(CarbonateSystem_ID, ready_)            
+if1 :   if ((ready_ .EQ. IDLE_ERR_     ) .OR.                                 &
+            (ready_ .EQ. READ_LOCK_ERR_)) then
+
+            if (present(PropLB   )) PropLB    = Me%Prop%ILB
+            if (present(PropUB   )) PropUB    = Me%Prop%IUB
+
+            STAT_ = SUCCESS_
+        else 
+            STAT_ = ready_
+        end if if1
+
+        if (present(STAT))STAT = STAT_
+
+        !----------------------------------------------------------------------
+
+   end subroutine GetCarbonateSystemSize
+   !:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+   
+   
+   !> @author: Marta López, Maretec
+   !> @Brief: Sends the global data index of properties that are going to be calculated in
+   !> this module, during an specific simulation, to the module that need it
+   !> (interface module). There, interface will compare if the properties activated in the 
+   !> waterpropertiesmodule (for being calculated in CSmodule with CARBSYST keyword on) are 
+   !> the same as in the carbonatesystempropertylist.
+   !:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+    subroutine GetCarbonateSystemPropertyList(CarbonateSystem_ID, PropertyList, STAT)
+
+        !Arguments-------------------------------------------------------------
+        integer                                            :: CarbonateSystem_ID
+        integer, dimension(:), pointer, intent(OUT)        :: PropertyList
+        integer, optional, intent(OUT)                     :: STAT
+
+        !External--------------------------------------------------------------
+        integer                                            :: ready_            
+        !Local-----------------------------------------------------------------
+        integer                                            :: STAT_
+        !----------------------------------------------------------------------
+        STAT_ = UNKNOWN_
+
+        call Ready(CarbonateSystem_ID, ready_)            
+if1 :   if ((ready_ .EQ. IDLE_ERR_     ) .OR.                                 &
+            (ready_ .EQ. READ_LOCK_ERR_)) then
+            call Read_Lock(mCarbonateSystem_, Me%InstanceID)
+            PropertyList =>  Me%PropertyList
+            STAT_ = SUCCESS_
+        else 
+            STAT_ = ready_
+        end if if1
+
+        if (present(STAT))STAT = STAT_
+    !----------------------------------------------------------------------
+    end subroutine GetCarbonateSystemPropertyList
+    !:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+    
+    
+    !> @author: Marta López, Maretec
+    !> @Brief: Nullify the carbonatesystemproplist in the interface module, after it 
+    !> compares if the properties activated in the waterpropertiesmodule 
+    !> (for being calculated in CSmodule with CARBSYST keyword on) are 
+    !> the same as in the carbonatesystempropertylist.  
+    !:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+    
+    subroutine UnGetCarbonateSystem(ObjCarbonateSystemID, Array, STAT)
+    
+        !Arguments-------------------------------------------------------------
+        integer                                         :: ObjCarbonateSystemID
+        integer, dimension(:), pointer                  :: Array
+        integer, intent(OUT), optional                  :: STAT
+        !Local-----------------------------------------------------------------
+        integer                                         :: STAT_, ready_
+        !----------------------------------------------------------------------
+        STAT_ = UNKNOWN_
+
+        call Ready(ObjCarbonateSystemID, ready_)
+        if (ready_ .EQ. READ_LOCK_ERR_) then
+            nullify(Array)
+            call Read_Unlock(mCarbonateSystem_, Me%InstanceID, "UnGetCarbonateSystem3D_I")
+            STAT_ = SUCCESS_
+        else               
+            STAT_ = ready_
+        end if
+
+        if (present(STAT)) STAT = STAT_        
+    !----------------------------------------------------------------------
+    end subroutine UnGetCarbonateSystem
+    !:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+    
+    
+    !> @author: Marta López, Maretec
+    !> @Brief: Compares the global property ID of all properties activated in 
+    !> the water properties module with the global property ID of the PropertyList,
+    !> this is, the properties that are going to be calculated in this module. 
+    !> This subroutine is called by module interface, 1est to fill variable mass of 
+    !> the properties this module will calculate, and 2nd to check consistence between
+    !> module interface and carbonatesystem.
+    !:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::    
+    
+    subroutine GetCarbonateSystemPropIndex (CarbonateSystem_ID, PropIDNumber, PropertyIndex, STAT)
+
+        !Arguments-------------------------------------------------------------
+        integer                             :: CarbonateSystem_ID
+        integer,           intent(IN )      :: PropIDNumber
+        integer,           intent(OUT)      :: PropertyIndex
+        integer, optional, intent(OUT)      :: STAT
+        !External--------------------------------------------------------------
+        integer                             :: ready_            
+        !Local-----------------------------------------------------------------
+        integer                             :: STAT_, CurrentIndex        
+        !----------------------------------------------------------------------
+        STAT_ = UNKNOWN_
+
+        call Ready(CarbonateSystem_ID, ready_)    
+        
+if1 :   if ((ready_ .EQ. IDLE_ERR_     ) .OR.                                 &
+            (ready_ .EQ. READ_LOCK_ERR_)) then
+            do CurrentIndex = Me%Prop%ILB, Me%Prop%IUB
+                if (PropIDNumber == Me%PropertyList(CurrentIndex))then
+                    PropertyIndex = CurrentIndex
+                    STAT_ = SUCCESS_
+                    exit
+                else
+                    STAT_ = NOT_FOUND_ERR_
+                end if
+            end do
+        else 
+            STAT_ = ready_
+        end if if1
+
+        if (present(STAT))STAT = STAT_
+    !--------------------------------------------------------------------------
+    end subroutine GetCarbonateSystemPropIndex
+    !:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+      
+
+    
+    
+    
+    !++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    !++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+    !MODIFIER MODIFIER MODIFIER MODIFIER MODIFIER MODIFIER MODIFIER MODIFIER MODI
+
+    !++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    !++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+    !>@author Marta López Maretec
+    !>@Brief:
+    !> Associates external variables needed in this module, already calculated in other 
+    !> modules. Checks the grid points wherein perform calculations and calls
+    !> the subroutine which contains the ones that do computations. This subroutine is 
+    !> called each time step.
+    !>@param[in] ObjCarbonateSystemID,Salinity,Temperature;thickness,Mass,OpenPoints,
+    !>@ArraySize,Latitude,Longitude   
+    !::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::      
+    subroutine ModifyCarbonateSystem(ObjCarbonateSystemID,                       &
+                                     Salinity,                                   & 
+                                     Temperature,                                &
+                                     Thickness,                                  &
+                                     Mass,                                       &
+                                     OpenPoints,                                 &
+                                     ArraySize,                                  &
+                                     Latitude,                                   &
+                                     Longitude,                                  &
+                                     STAT)
+    !Arguments-------------------------------------------------------------------------    
+      integer                                                   :: ObjCarbonateSystemID
+      real,               pointer, intent(IN), dimension(:  )   :: Salinity
+      real,               pointer, intent(IN), dimension(:  )   :: Temperature
+      real,               pointer, intent(IN), dimension(:  )   :: Thickness
+      real,               pointer, intent(IN), dimension(:,:)   :: Mass
+      integer, optional,  pointer, intent(IN), dimension(:  )   :: OpenPoints
+      real,               pointer, intent(IN), dimension(:  )   :: Latitude
+      real,               pointer, intent(IN), dimension(:  )   :: Longitude
+      type(T_Size1D)             , intent(IN)                   :: ArraySize
+      integer, optional,           intent(OUT)                  :: STAT           
+    !Local------------------------------------------------------------------------------      
+      integer                                     :: STAT_, ready_
+      logical                                     :: CalcPoint    
+      integer                                     :: index        !Element of the 1Darray
+    !----------------------------------------------------------------------
+        STAT_ = UNKNOWN_
+        
+        call Ready(ObjCarbonateSystemID, ready_)
+        if (ready_ .EQ. IDLE_ERR_) then
+
+         !Associates external variables (salinity) to variables for this module (Me%ExternalVar%Salinity)
+            Me%ExternalVar%Salinity                   => Salinity
+            if (.NOT. associated(Me%ExternalVar%Salinity))         &
+                stop 'Subroutine ModifyCarbonateSystem - ModuleCarbonateSystem. ERR01' 
+            Me%ExternalVar%Temperature                => Temperature
+            if (.NOT. associated(Me%ExternalVar%Temperature))        &
+                stop 'Subroutine ModifyCarbonateSystem - ModuleCarbonateSystem. ERR02'       
+            Me%ExternalVar%Thickness                  => Thickness
+            if (.NOT. associated(Me%ExternalVar%Thickness))          &
+                stop 'Subroutine ModifyCarbonateSystem - ModuleCarbonateSystem. ERR03'  
+            Me%ExternalVar%Mass                       => Mass
+            if (.NOT. associated(Me%ExternalVar%Mass))               &
+                stop 'Subroutine ModifyCarbonateSystem - ModuleCarbonateSystem. ERR04' 
+            Me%ExternalVar%OpenPoints                 => OpenPoints
+            if (.NOT. associated(Me%ExternalVar%OpenPoints))         &
+               stop 'Subroutine ModifyCarbonateSystem - ModuleCarbonateSystem. ERR05' 
+            Me%ExternalVar%Latitude                   => Latitude
+            if (.NOT. associated(Me%ExternalVar%Latitude))           &
+               stop 'Subroutine ModifyCarbonateSystem - ModuleCarbonateSystem. ERR06' 
+            Me%ExternalVar%Longitude                  => Longitude
+            if (.NOT. associated(Me%ExternalVar%Longitude))           &
+               stop 'Subroutine ModifyCarbonateSystem - ModuleCarbonateSystem. ERR07'
+                          
+            !Associates array dimension (external) to array dimension variable of this module(Me%Array%) 
+            Me%Array%ILB = ArraySize%ILB
+            Me%Array%IUB = ArraySize%IUB
+
+            !Checks along dimensions of open point 1Darray (grid array converted to 1D) the points with water
+d1:         do index = Me%Array%ILB, Me%Array%IUB            
+ i1:            if (present(OpenPoints)) then
+   i2:              if (OpenPoints(index) == OpenPoint) then
+                       CalcPoint = .true.
+                    else
+                       CalcPoint = .false.
+                    endif i2
+                else
+                    CalcPoint = .true.
+                endif i1               
+             !If the array element contains water (CalcPoint = true), do computations in it 
+ i3:           if (CalcPoint) then 
+                call CS_computations(index)  
+               endif i3
+            end do d1
+           
+            !When calculations are done, nullify associated external var for the next time step calculation
+            nullify(Me%ExternalVar%Salinity   )
+            nullify(Me%ExternalVar%Temperature)
+            nullify(Me%ExternalVar%Mass       )  
+            nullify(Me%ExternalVar%Latitude   )  
+            nullify(Me%ExternalVar%Longitude  )          
+            
+            STAT_ = SUCCESS_
+        else               
+            STAT_ = ready_
+        end if
+
+        if (present(STAT)) STAT = STAT_           
+ !----------------------------------------------------------------------------
+   end subroutine ModifyCarbonateSystem
+ !:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::: 
+
+                                     
+                                     
+ !>@author Marta López Maretec
+ !>@Brief:
+ !> Calls the subroutines that do computations
+ !>@param[in] index
+ !:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::: 
+                                     
+  subroutine CS_computations(index)   
+  
+  !Arguments------------------------------------------------------------------  
+   integer, intent(IN) :: index   !Element of the 1Darray
+  !---------------------------------------------------------------------------- 
+   
+  ! Alkalinity calculation, depending on the chosen option of .datfile     
+   i1: if (Me%ComputeOptions%NoBiologicalAlkalinity)    then        
+          call ComputeAlkalinity_param  (index)         
+       elseif (Me%ComputeOptions%BiologicalAlkalinity)  then   
+          call ComputeAlkalinity_bio    (index)       
+       endif i1
+                        
+  ! DIC calculation, depending on the chosen option of .datfile        
+   i2: if (Me%ComputeOptions%DIC_calcification) then                        
+  !      call ComputeDIC_calc    (index) 
+         !write(*,*)'hi, DIC calc ON ,modifier' !marta                      
+       elseif (Me%ComputeOptions%DIC_no_calcification) then                        
+  !      call ComputeDIC_no_calc (index)   
+         !write(*,*)'hi, DIC no_calc ON .modifier' !marta  
+       endif i2
+  
+  ! Rest of carbonate system parameters calculation     
+       
+  ! i3: if () then             
+  !      call mocsy (index)       
+  !     endif i3
+ !----------------------------------------------------------------------------
+  end subroutine  CS_computations
+ !:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::: 
+ 
+  
+  
+ !>@author Marta López, Maretec
+ !>@Brief:
+ !> Calculates alkalinity values through algorithms proposed by Lee.et al 2006
+ !>@param[in] index 
+ !::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::: 
+  
+  subroutine ComputeAlkalinity_param(index)
+  
+    !Arguments-------------------------------------------------------------
+     integer, intent(IN) :: index       
+    !Local-----------------------------------------------------------------     
+     real                         :: ALK                !Alkalinity
+     real                         :: Lat                !Latitude local
+     real                         :: Long               !Longitude local
+     real                         :: Temp               !Temperature  local       
+     character(len=StringLength)  :: Ocean_Case             = null_str 
+     !     'North_Atlantic'         30ºN-80ºN, 0ºC<SST<20ºC; 31<SSS<37 
+     !     'North_Pacific'              >30ºN,     SST<20ºC; 31<SSS<35 
+     !     'Subtropics'             30ºS-30ºN,     SST>20ºC; 31<SSS<38 
+     !     'Southern_Ocean'         70ºS-30ºS,     SST<20ºC; 33<SSS<36
+     !     'Eq_upwelling_Pacific'   20ºS-20ºN,75ºW-110ºW;10ºS-10ºN,110ºW-140ºW,...             
+     !     'Out_of_range_S'                          ... SST>18ºC; 31<SSS<36.5
+     !     'Out_of_range_N'     
+    !----------------------------------------------------------------------     
+     Lat  = Me%ExternalVar%Latitude(index) 
+     Long = Me%ExternalVar%Longitude(index)
+     Temp = Me%ExternalVar%Temperature(index)     
+    !----------------------------------------------------------------------  
+     !Lee et al., 2006. Global relationships of TA  with salinity and temperature in surface waters:
+     !  "For predicting At from SS and SST values in a given zone, the primary criterion for choosing 
+     !  an appropiate AT algorithms is the SST. If the temperature of a water sample in the zone of 
+     !  interest is out of the range of the applicable equation, the equation for an adjacent zone sharing
+     !  a common boundary shoud be choosen" 
+        
+     !First select the ocean region
+i1:     IF (((Lat .GE. 30.) .AND. (lat < 80.)) .and. ((Long .GE. -100.) .AND. (Long < 100.))) THEN
+            Ocean_Case = 'North_Atlantic'        
+        ELSEIF ((Lat .GE. 30.) .and. ((Long .GE. 100.) .AND. (Long < -100.))) THEN    
+            Ocean_Case = 'North_Pacific'    
+        ELSEIF ((Lat .GE. -30.) .AND. (lat < 30.)) THEN         
+   i2:          IF (((Lat .GE. -20.) .AND. (lat < 20.)) .and. ((Long .GE. -110.) .AND. (Long < -75.))) THEN            
+                    Ocean_Case = 'Eq_upwelling_Pacific'            
+                ELSEIF (((Lat .GE. -10.) .AND. (lat < 10.)) .and. ((Long .GE. -140.) .AND. (Long < -110.))) THEN            
+                    Ocean_Case = 'Eq_upwelling_Pacific'            
+                ELSE                    
+                    Ocean_Case = 'Subtropics'                
+                ENDIF i2                 
+        ELSEIF ((Lat .GE. -70.) .AND. (lat < -30.)) THEN    
+            Ocean_Case = 'Southern_Ocean'            
+        ELSEIF (Lat < -70.) THEN            
+            Ocean_Case = 'Out_of_range_S'           
+        ELSE              
+            Ocean_Case = 'Out_of_range_N'            
+        ENDIF i1
+    
+     !Second, evaluate if the temperature corresponds to the allowed region interval, if not use the equation 
+     !from the adjacent zone     
+   SELECT CASE(Ocean_Case)
+         
+     CASE ('North_Atlantic')
+      write(*,*)'Ocean_Case is North_Atlantic'
+        if (temp < 20.) then    
+          ALK = 2305. + 53.97 * (Me%ExternalVar%Salinity(index) - 35.) + 2.74 *((Me%ExternalVar%Salinity(index) - 35.) ** 2.) &
+                   & - 1.16 *(Me%ExternalVar%Temperature(index) - 20.) - 0.040*((Me%ExternalVar%Temperature(index) - 20.)** 2.)
+        else
+          write(*,*)'Ha cambiado a subtropics por la temperatura' !marta
+         ALK = 2305. + 58.66 * (Me%ExternalVar%Salinity(index) - 35.) + 2.32 *((Me%ExternalVar%Salinity(index) - 35.) ** 2.) &
+                     & - 1.41 *(Me%ExternalVar%Temperature(index) - 20.) + 0.040*((Me%ExternalVar%Temperature(index) - 29.)** 2.) 
+        endif    
+          
+        
+     CASE ('North_Pacific')
+      write(*,*)'Ocean_Case is North_Pacific'
+        if (temp < 20.) then 
+         ALK = 2305. + 53.23 * (Me%ExternalVar%Salinity(index) - 35.) + 1.85 *((Me%ExternalVar%Salinity(index) - 35.) ** 2.) &
+                   & - 14.72 * (Me%ExternalVar%Temperature (index) - 20.)  &
+                   & - 0.158 * ((Me%ExternalVar%Temperature(index) - 20.) ** 2.) &          
+                   & + 0.062 * (Me%ExternalVar%Temperature (index) - 20.) * Me%ExternalVar%Longitude(index) 
+        else
+         ALK = 2305. + 58.66 * (Me%ExternalVar%Salinity(index) - 35.) + 2.32 *((Me%ExternalVar%Salinity(index) - 35.) ** 2.) &
+                     & - 1.41 *(Me%ExternalVar%Temperature(index) - 20.) + 0.040*((Me%ExternalVar%Temperature(index) - 29.)** 2.) 
+        endif    
+              
+        
+     CASE ('Subtropics')
+      write(*,*)'Ocean_Case is Suptropics'
+i3:     if (temp > 20.) then         
+          ALK = 2305. + 58.66 * (Me%ExternalVar%Salinity(index) - 35.) + 2.32 *((Me%ExternalVar%Salinity(index) - 35.) ** 2.) &
+                     & - 1.41 *(Me%ExternalVar%Temperature(index) - 20.) + 0.040*((Me%ExternalVar%Temperature(index) - 29.)** 2.) 
+        else 
+    
+  i4:     if ((Long .GE. -100.) .AND. (Long < 100.)) then
+            ALK = 2305. + 53.97 * (Me%ExternalVar%Salinity(index) - 35.) + 2.74 *((Me%ExternalVar%Salinity(index) - 35.) ** 2.) &
+                   & - 1.16 *(Me%ExternalVar%Temperature(index) - 20.) - 0.040*((Me%ExternalVar%Temperature(index) - 20.)** 2.)  
+              
+          else
+            ALK = 2305. + 53.23 * (Me%ExternalVar%Salinity    (index) - 35.) + 1.85 *((Me%ExternalVar%Salinity(index) - 35.) ** 2.) &
+                      & - 14.72 * (Me%ExternalVar%Temperature (index) - 20.)        &
+                      & - 0.158 * ((Me%ExternalVar%Temperature(index) - 20.) ** 2.) &          
+                      & + 0.062 * (Me%ExternalVar%Temperature (index) - 20.) * Me%ExternalVar%Longitude(index)             
+          endif i4
+          
+        endif i3         
+          
+                
+     CASE ('Eq_upwelling_Pacific')
+      write(*,*)'Ocean_Case is Eq_upwelling_Pacific'
+          ALK = 2294. + 64.88 * (Me%ExternalVar%Salinity(index) - 35.) + 0.39 *((Me%ExternalVar%Salinity(index) - 35.) ** 2.) &
+                    & -  4.52 * (Me%ExternalVar%Temperature (index) - 20.) &
+                    & - 0.232 * ((Me%ExternalVar%Temperature(index) - 29.)** 2.)           
+          
+     CASE ('Southern_Ocean')
+      write(*,*)'Ocean_Case is Southern_Ocean'
+        if (temp < 20.) then       
+          ALK = 2305. + 52.48 * (Me%ExternalVar%Salinity(index) - 35.) + 2.85 *((Me%ExternalVar%Salinity(index) - 35.) ** 2.) &
+                     & - 0.49 *(Me%ExternalVar%Temperature(index) - 20.) + 0.086 *((Me%ExternalVar%Temperature(index) - 20.)** 2.)  
+        else
+          ALK = 2305. + 58.66 * (Me%ExternalVar%Salinity(index) - 35.) + 2.32 *((Me%ExternalVar%Salinity(index) - 35.) ** 2.) &
+                    & - 1.41 * (Me%ExternalVar%Temperature(index) - 20.) &
+                    & + 0.040*((Me%ExternalVar%Temperature(index) - 29.)** 2.)            
+        endif
+        
+        
+     CASE('Out_of_range_S') 
+          write(*,*)'The point with latitude', Lat
+          write(*,*)'and longitude', Long
+          write(*,*)'has not a representative algorithm for Alkalinity. It is going to be calculated through the algorithm of the '
+          write(*,*)'Southern Ocean.It is recommended to use the biological alkalinity calculation option.Check it in the .datfile'
+          ALK = 2305. + 52.48 * (Me%ExternalVar%Salinity(index) - 35.) + 2.85 *((Me%ExternalVar%Salinity(index) - 35.) ** 2.) &
+                     & - 0.49 *(Me%ExternalVar%Temperature(index) - 20.) + 0.086 *((Me%ExternalVar%Temperature(index) - 20.)** 2.)  
+          
+          
+     CASE('Out_of_range_N') 
+         write(*,*)'The point with latitude', Lat
+         write(*,*)'and longitude', Long
+         write(*,*)'has not a representative algorithm for Alkalinity. It is going to be calculated through the algorithm of the'
+         write(*,*)'North Atlantic. It is recommended to use the biological alkalinity calculation option'          
+           ALK = 2305. + 53.97 * (Me%ExternalVar%Salinity(index) - 35.) + 2.74 *((Me%ExternalVar%Salinity(index) - 35.) ** 2.) &
+                     & - 1.16 *(Me%ExternalVar%Temperature(index) - 20.) - 0.040*((Me%ExternalVar%Temperature(index) - 20.)** 2.) 
+           
+     END SELECT
+     
+     Me%ExternalVar%Mass(Me%PropIndex%ALK_cs_p , Index) = ALK !marta Pedir a alguien que revise si esto está bien
+     !write(*,*) 'Alcalinidad (umol/kg) = ', ALK 
+     !write(*,*)'latitud=', Lat
+     !write(*,*)'longitud=', Long
+     !write(*,*)'temperatura=', temp
+    !write(*,*)'thickness = ', Me%ExternalVar%Thickness(index) 
+    !write(*,*)'Openpoints =', Me%ExternalVar%OpenPoints(index)
+    !write(*,*) 'Ha entrado en computealkalinity_param, index = ', index !marta
+   ! write(*,*) 'Index = ', index !marta
+!----------------------------------------------------------------------------
+  end subroutine ComputeAlkalinity_param
+!::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+
+ !>@author Marta López, Maretec
+ !>@Brief:
+ !> Calculates alkalinity values taking into account the changes due to 
+ !> biological activity
+ !>@param[in] index, 
+!:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+  
+ subroutine ComputeAlkalinity_bio(index)
+ 
+   !Arguments-----------------------------------------------------------------
+     integer, intent(IN) :: index   
+    !Local--------------------------------------------------------------------    
+     real                :: Red_NC     !Nitrogen to Carbon Redfield ratio
+     !real               :: ALK        !Alkalinity
+     !real               :: Temp       !Temperature        
+
+    !-------------------------------------------------------------------------  
+     Red_NC  = Me%BioChemParam%Redfield_NC
+     !Temp      = Me%ExternalVar%Temperature(index)     
+     !yN
+     !yP     
+     !marta vas a necesitar cambiar mg a moles porque rateflux va a venir en mg
+    !---------------------------------------------------------------------------
+ i1:  IF (Me%ComputeOptions%DIC_calcification) THEN                       !Calculate changes in alk including calcite prec/dis  
+     
+  i2:     if (Me%ComputeOptions%PelagicModel .eq. WaterQualityModel) then 
+      
+             Me%ExternalVar%Mass(Me%PropIndex%ALK_cs_b, Index) = Me%ExternalVar%Mass(Me%PropIndex%ALK_cs_b, Index) !&    
+             !                                            + ((0.8 + yN + yP) * Red_NC * DenitRate        &    ! <- sources
+             !                                            + (yN + yP) * Red_NC * PPbasedonnitrate        & 
+             !                                            + (yN - yP) * Red_NC * AerobicMineral          &
+             !                                            + 2. * CaCo3Disolution                         &
+             !                                            - ((2.* Red_NC * (- Nitrif1 + Nitrif2 ))       &    ! <- sinks                                   
+             !                                            + 2. * CaCo3Precipitation
+             !                                            + (yP - yN) * Red_NC * PPbasedonammonia)) * Me%DT_day
+                  
+          elseif (Me%ComputeOptions%PelagicModel .eq. LifeModel) then
+          endif i2          
+
+      ELSEIF (Me%ComputeOptions%DIC_no_calcification) THEN                 !Not include changes due to calcite prec/dis  
+     
+  i3:     if (Me%ComputeOptions%PelagicModel .eq. WaterQualityModel) then
+      
+             Me%ExternalVar%Mass(Me%PropIndex%ALK_cs_b, Index) = Me%ExternalVar%Mass(Me%PropIndex%ALK_cs_b, Index)  !  &    
+             !                                                  + ((0.8 + yN + yP) * Red_NC * DenitRate        &    ! <- sources
+             !                                                  + (yN + yP) * Red_NC * PPbasedonnitrate        & 
+             !                                                  + (yN - yP) * Red_NC * AerobicMineral          &
+             !                                                  - (2.* Red_NC * NitrifRate                     &    ! <- sinks                                 
+             !                                                  + (yP - yN) * Red_NC * PPbasedonammonia)) * Me%DT_day   
+      
+          elseif (Me%ComputeOptions%PelagicModel .eq. LifeModel) then
+          endif i3          
+
+      ENDIF i1
+      
+!----------------------------------------------------------------------------     
+ end subroutine ComputeAlkalinity_bio
+!::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+
+
+
+
+
+
+
+
+
+!:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::      
+!subroutine ComputeDIC_calc(index)
+!integer, intent(IN) :: index
+!----------------------------------------------------------------------------
+!end subroutine ComputeDIC_calc
+!::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+!:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::      
+!subroutine ComputeDIC_no_calc(index)
+!integer, intent(IN) :: index
+!----------------------------------------------------------------------------
+!end subroutine ComputeDIC_no_calc
+!::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+
+!:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::      
+ !subroutine mocsy(index)
+! This subroutine is adapted from mocsy package https://github.com/jamesorr/mocsy
+! All the info about variables, compute options and others can be found on the link above
+! integer, intent(IN) :: index
+ 
+!Arguments-------------------------------------------------------------
+
+     !integer, intent(IN) :: index 
+!----------------------------------------------------------------------------
+     
+     !call (index)
+     
+!----------------------------------------------------------------------------
+
+ !end subroutine mocsy
+!::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+  
+!++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+!++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+!DESTRUCTOR DESTRUCTOR DESTRUCTOR DESTRUCTOR DESTRUCTOR DESTRUCTOR DESTRUCTOR
+
+ !++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ !++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+ !::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+     
+  subroutine KillCarbonateSystem(ObjCarbonateSystemID, STAT)
+
+    !Arguments------------------------------------------------------------
+    integer                             :: ObjCarbonateSystemID              
+    integer, optional, intent(OUT)      :: STAT
+    !External-------------------------------------------------------------
+    integer                             :: ready_, nUsers           
+    !Local----------------------------------------------------------------
+    integer                             :: STAT_           
+    !---------------------------------------------------------------------
+    STAT_ = UNKNOWN_        
+    call Ready(ObjCarbonateSystemID, ready_)  
+    
+if1 :   if (ready_ .NE. OFF_ERR_) then
+            nUsers = DeassociateInstance(mCarbonateSystem_,  Me%InstanceID)  
+            if (nUsers == 0) then
+                call DeallocateInstance
+                ObjCarbonateSystemID = 0
+                STAT_ = SUCCESS_
+            endif
+        else 
+            STAT_ = ready_
+        end if if1   
+        
+     if (present(STAT)) STAT = STAT_
+    !------------------------------------------------------------------------
+    end subroutine KillCarbonateSystem
+    !:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::: 
+    
+    
+     
+    !::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+     
+    subroutine DeallocateInstance
+
+        !Arguments-------------------------------------------------------------
+
+        !Local-----------------------------------------------------------------
+        type (T_CarbonateSystem), pointer          :: AuxObjCarbonateSystem
+        type (T_CarbonateSystem), pointer          :: PreviousObjCarbonateSystem
+
+        !Updates pointers
+        if (Me%InstanceID == FirstObjCarbonateSystem%InstanceID) then
+            FirstObjCarbonateSystem => FirstObjCarbonateSystem%Next
+        else
+            PreviousObjCarbonateSystem => FirstObjCarbonateSystem
+            AuxObjCarbonateSystem      => FirstObjCarbonateSystem%Next
+            do while (AuxObjCarbonateSystem%InstanceID /= Me%InstanceID)
+                PreviousObjCarbonateSystem => AuxObjCarbonateSystem
+                AuxObjCarbonateSystem      => AuxObjCarbonateSystem%Next
+            enddo
+
+            !Now update linked list
+            PreviousObjCarbonateSystem%Next => AuxObjCarbonateSystem%Next
+
+            !Deallocates instance
+            deallocate (Me)
+            nullify    (Me) 
+
+        endif
+     !----------------------------------------------------------------------       
+    end subroutine DeallocateInstance
+    !:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::  
+    
+    
+
+    !++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++      
+    !++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+    !MANAGEMENT MANAGEMENT MANAGEMENT MANAGEMENT MANAGEMENT MANAGEMENT MANAGEME
+
+    !++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    !++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+    !:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::: 
+
+    subroutine Ready (ObjCarbonateSystemID, ready_) 
+    
+    !Arguments-------------------------------------------------------------
+        integer                                     :: ObjCarbonateSystemID
+        integer                                     :: ready_
+      !----------------------------------------------------------------------
+       nullify (Me)
+
+cd1:    if (ObjCarbonateSystemID > 0) then
+            call LocateObjCarbonateSystem (ObjCarbonateSystemID)
+            ready_ = VerifyReadLock (mCarbonateSystem_, Me%InstanceID)
+        else
+            ready_ = OFF_ERR_
+
+        end if cd1
+      !----------------------------------------------------------------------
+    end subroutine Ready                  
+ !::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::      
+        
+    
+ !:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::: 
+   subroutine LocateObjCarbonateSystem(ObjCarbonateSystemID)
+
+        !Arguments-------------------------------------------------------------
+        integer                                    :: ObjCarbonateSystemID
+
+        !Local-----------------------------------------------------------------
+
+        Me => FirstObjCarbonateSystem
+        do while (associated (Me))
+            if (Me%InstanceID == ObjCarbonateSystemID) exit
+            Me => Me%Next
+        enddo
+
+        if (.not. associated(Me))                          &
+            stop 'ModuleCarbonateSystem - LocateObjCarbonateSystem - ERROR #1'
+
+    end subroutine LocateObjCarbonateSystem
+
+!:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::: 
+
+!----------------------------------------------------------------------------------------------------------
+
+end module ModuleCarbonateSystem
+
+!----------------------------------------------------------------------------------------------------------
+!MOHID Water Modelling System.
+!Copyright (C) 1985, 1998, 2002, 2005. Instituto Superior Técnico, Technical University of Lisbon. 
+!----------------------------------------------------------------------------------------------------------
