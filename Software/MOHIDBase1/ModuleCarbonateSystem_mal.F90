@@ -8,7 +8,7 @@
 ! URL           : http://www.mohid.com
 ! AFFILIATION   : IST/MARETEC, Marine Modelling Group
 ! DATE          : Feb 2020
-! REVISION      : Marta López Mozos - v1.0
+! REVISION      : Marta LÃ³pez Mozos - v1.0
 ! DESCRIPTION   : Zero-dimensional model for marine carbonate system                  
 !                 
 !------------------------------------------------------------------------------
@@ -387,7 +387,7 @@ cd0 : if (ready_ .EQ. OFF_ERR_) then
 
 
 !*******************************************************************************************
-!                            MODIFIER :D :D fuck
+!                            MODIFIER :D :D 
 !*******************************************************************************************    
       ! subroutine ComputeAlkalinity_salt()
     
@@ -462,7 +462,7 @@ end module ModuleCarbonateSystem
 
 !----------------------------------------------------------------------------------------------------------
 !MOHID Water Modelling System.
-!Copyright (C) 1985, 1998, 2002, 2005. Instituto Superior Técnico, Technical University of Lisbon. 
+!Copyright (C) 1985, 1998, 2002, 2005. Instituto Superior TÃ©cnico, Technical University of Lisbon. 
 !----------------------------------------------------------------------------------------------------------
 
 
