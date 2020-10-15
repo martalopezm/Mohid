@@ -3884,7 +3884,7 @@ cd22 :      if (flag .EQ. 0) then
         if (STAT_CALL .NE. SUCCESS_)                                                &
             stop 'Subroutine WQReadDiatomsFileConstants - ModuleModuleWaterQuality - ERR19'
 
-        !Diatoms Nitrogen/Carbon Ratio, mg N/mgC
+        !Diatoms Nitrogen/Carbon Ratio, mg N/mgC 
         call GetData(Me%Diatoms%DiaAlfaNC,                                          &
                      Me%ObjEnterData, flag,                                         &
                      SearchType   = FromFile,                                       &
@@ -4995,7 +4995,7 @@ do2 :       do j = PropLB, PropUB
 
 
     !>@author:
-    !>@Brief: Initialization of matrix and indterm arrays
+    !>@Brief: 
     !>@param[in]  
     !--------------------------------------------------------------------------
 

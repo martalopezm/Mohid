@@ -251,8 +251,11 @@ Module ModuleInterface
         real(8), pointer, dimension(:    )      :: WaterVolume1D            => null() !Array with volumes from unfold matrix 
         real,    pointer, dimension(:    )      :: CellArea1D               => null()!Array with volumes from unfold matrix
         real,    pointer, dimension(:    )      :: VelocityModulus1D
-        real,    pointer, dimension(:    )      :: Latitude1D                => null()
-        real,    pointer, dimension(:    )      :: Longitude1D               => null()
+        real,    pointer, dimension(:    )      :: Latitude1D                => null() !MartaLopez
+        real,    pointer, dimension(:    )      :: Longitude1D               => null() !MartaLopez
+        real,    pointer, dimension(:    )      :: Rate_Nitrif1_1D           => null() !MartaLopez
+        
+        
 #ifdef _PHREEQC_        
         real,    pointer, dimension(:    )      :: WaterSaturation          => null()
         real,    pointer, dimension(:    )      :: Porosity                 => null()
@@ -287,7 +290,7 @@ Module ModuleInterface
         real,    pointer, dimension(:    )      :: MacrOccupation           => null()
         
         real,    pointer, dimension(:    )      :: SettlementProbability
-        
+
 #ifdef _PHREEQC_
         real, pointer                           :: SolutionMapping(:) => null()
         real, pointer                           :: EquilibriumMapping(:) => null()
@@ -374,11 +377,6 @@ Module ModuleInterface
                                     SinksSourcesModel,                     &
                                     DT,PropertiesList,                     &
                                     WaterPoints3D,                         &
-
-
-
-
-
                                     Size3D,                                &
                                     Vertical1D,                            &
                                     BivalveID,                             &
@@ -464,8 +462,9 @@ cd0 :   if (ready_ .EQ. OFF_ERR_) then
             endif
             
            if (present(CarbonateSystemID)) then
-                CarbonateSystemID = Me%ObjCarbonateSystem
-            endif
+                CarbonateSystemID = Me%ObjCarbonateSystem                
+           endif
+     
 
             !Verify model DT's
             call CheckDT
@@ -1224,10 +1223,14 @@ cd0 :   if (ready_ .EQ. OFF_ERR_) then
                 allocate(Me%Longitude1D(ArrayLB:ArrayUB), STAT = STAT_CALL)
                 if (STAT_CALL .NE. SUCCESS_)stop 'AllocateVariables - ModuleInterface - ERR163' 
                 
+                allocate(Me%Rate_Nitrif1_1D(ArrayLB:ArrayUB), STAT = STAT_CALL)
+                if (STAT_CALL .NE. SUCCESS_)stop 'AllocateVariables - ModuleInterface - ERR164' 
+                
                 Me%Salinity             = FillValueReal
                 Me%Thickness            = FillValueReal
                 Me%Latitude1D           = FillValueReal
                 Me%Longitude1D          = FillValueReal
+                Me%Rate_Nitrif1_1D      = FillValueReal
                 
             case default
                 write(*,*) 
@@ -1406,7 +1409,7 @@ cd1 :           if(STAT_CALL .EQ. KEYWORD_NOT_FOUND_ERR_) then
                                        Me%FileName,                            &
                                        STAT = STAT_CALL) 
                 if (STAT_CALL /= SUCCESS_) stop 'StartSinksSourcesModel - ModuleInterface - ERR01'
- 
+
                 !Construct mass fluxes between properties
                 call Construct_WQRateFlux(Me%ObjWaterQuality,                  &
                                           Me%Array%ILB,                        &
@@ -1638,8 +1641,6 @@ cd1 :           if(STAT_CALL .EQ. KEYWORD_NOT_FOUND_ERR_) then
                 call GetDTBenthicEcology(Me%ObjBenthicEcology, DTSecond = DT, STAT = STAT_CALL)
                 if (STAT_CALL /= SUCCESS_) stop 'StartSinksSourcesModel - ModuleInterface - ERR025'
                 
-                
-
 #ifdef _PHREEQC_
 
             case (PhreeqCModel)
@@ -1658,19 +1659,9 @@ cd1 :           if(STAT_CALL .EQ. KEYWORD_NOT_FOUND_ERR_) then
                                          Me%Array%ILB,              &
                                          Me%Array%IUB,              &
                                          STAT_CALL)
-
-
-
-
-
-                    
                 call GetPhreeqCDT(Me%ObjPhreeqC, DT, STAT_CALL)
                 if (STAT_CALL /= SUCCESS_) stop 'StartSinksSourcesModel - ModuleInterface - ERR120'
-
-
-
-
-                                
+   
                 !Number of properties involved
                 call GetPhreeqCSize (Me%ObjPhreeqC,                         &
                                      PropLB,                                &
@@ -1814,7 +1805,7 @@ cd1 :           if(STAT_CALL .EQ. KEYWORD_NOT_FOUND_ERR_) then
                 
             case(CarbonateSystemModel)
                 
-                !Construct CarbonateSystem Model
+                !Construct CarbonateSystem Model. 
                 call ConstructCarbonateSystem(Me%ObjCarbonateSystem,           &
                                               FileName = Me%FileName,          &
                                               STAT = STAT_CALL) 
@@ -3118,7 +3109,7 @@ cd14 :          if (Phosphorus) then
                              STAT)
         !Arguments--------------------------------------------------------------
         integer                                                 :: InterfaceID
-        real,             intent(OUT),dimension(:,:,:), pointer :: RateFlux3D 
+        real,                         dimension(:,:,:), pointer :: RateFlux3D 
         integer,           intent(IN),dimension(:,:,:), pointer :: WaterPoints3D
         integer, optional, intent(IN)                           :: FirstProp
         integer, optional, intent(IN)                           :: SecondProp
@@ -3581,6 +3572,7 @@ cd1 :   if ((ready_ .EQ. IDLE_ERR_) .OR. (ready_ .EQ. READ_LOCK_ERR_)) then
                                   DissolvedToParticulate3D, SoilDryDensity, Salinity,   &
                                   pH, IonicStrength, PhosphorusAdsortionIndex,          &
                                   Latitude, Longitude,                                  & !marta
+                                  Rate_Nitrif1,                                         &
                                   NintFac3D, NintFac3DR, PintFac3D,                     &
                                   RootsMort, PintFac3DR,                                &
                                   SedimCellVol3D,                                       &
@@ -3608,6 +3600,7 @@ cd1 :   if ((ready_ .EQ. IDLE_ERR_) .OR. (ready_ .EQ. READ_LOCK_ERR_)) then
         real,    optional, dimension(:,:,:), pointer    :: pH
         real,    optional, dimension(:,:  ), pointer    :: Latitude
         real,    optional, dimension(:,:  ), pointer    :: Longitude
+        real,    optional, dimension(:,:,:), pointer    :: Rate_Nitrif1
         
         real,    optional, dimension(:,:,:), pointer    :: NintFac3D  !Isabella
         real,    optional, dimension(:,:,:), pointer    :: NintFac3DR  !Isabella
@@ -4071,6 +4064,7 @@ cd4 :           if (ReadyToCompute) then
                             call UnfoldMatrix(Me%ExternalVar%DWZ, Me%Thickness)
                             call UnfoldMatrix(Latitude, Me%Latitude1D)           
                             call UnfoldMatrix(Longitude, Me%Longitude1D)
+                            call UnfoldMatrix(Rate_Nitrif1, Me%Rate_Nitrif1_1D)
                             call GetComputeCurrentTime(Me%ObjTime,                  &
                                                        Me%ExternalVar%Now,          &
                                                        STAT = STAT_CALL)                    
@@ -4085,6 +4079,7 @@ cd4 :           if (ReadyToCompute) then
                                       Me%Array,                             & 
                                       Me%Latitude1D,                        &
                                       Me%Longitude1D,                       &
+                                      Me%Rate_Nitrif1_1D,                &
                                       STAT_CALL)                                                 
                            if (STAT_CALL /= SUCCESS_) stop 'Modify_Interface3D - ModuleInterface - ERR18b'   
                             
@@ -4956,20 +4951,15 @@ cd4 :           if (ReadyToCompute) then
 
                             call WWTPQ(Me%ObjWWTPQ,                   &
                                               !Me%Salinity,                          &
-
                                               Me%Temperature,                       &
                                               !Me%ShortWaveTop,                      &
                                               !Me%LightExtCoefField,                 &
                                               !Me%Thickness,                         &
-
-
-
                                               Me%Mass,                              &
                                               Me%Array%ILB,                         &
                                               Me%Array%IUB,                         &
                                               Me%OpenPoints,                        &
                                               !FishFood = Me%FishFood,               &
-
                                               STAT = STAT_CALL)
                             if (STAT_CALL /= SUCCESS_) stop 'Modify_Interface1D - ModuleInterface - ERR10'
                             
@@ -4993,8 +4983,9 @@ cd4 :           if (ReadyToCompute) then
                                       Me%Mass,                                 &
                                       Me%OpenPoints,                           &
                                       Me%Array,                                &
-                                      Me%Latitude1D,                             &
-                                      Me%Longitude1D,                            &
+                                      Me%Latitude1D,                           &
+                                      Me%Longitude1D,                          &
+                                      Me%Rate_Nitrif1_1D,                   &
                                       STAT = STAT_CALL)
                             if (STAT_CALL /= SUCCESS_) stop 'Modify_Interface1D - ModuleInterface - ERR12'    
                             

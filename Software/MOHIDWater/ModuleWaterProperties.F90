@@ -12627,8 +12627,7 @@ cd1 :   if (ready_ .EQ. IDLE_ERR_) then
                 Me%Coupled%MaximumConcentration%Yes)          &
                 call SetLimitsConcentration(PhysicalProcesses = .false.) !('Surface Processes')
             
-            write (*,*) 'wqmodifier = ', Me%Coupled%WQM%Yes !marta
-            if (Me%Coupled%WQM%Yes)                           &
+           if (Me%Coupled%WQM%Yes)                           &
                 call WaterQuality_Processes
             
             if (Me%Coupled%CEQUALW2%Yes)                      &
@@ -12646,7 +12645,6 @@ cd1 :   if (ready_ .EQ. IDLE_ERR_) then
             if (Me%Coupled%WWTPQM%Yes)                        &
                 call WWTPQ_Processes
             
-            write (*,*) 'carbsyst = ', Me%Coupled%CarbonateSystem%Yes !marta
             if (Me%Coupled%CarbonateSystem%Yes)               &
                 call CarbonateSystem_Processes
 
@@ -15590,18 +15588,21 @@ cd5:                if (TotalVolume > 0.) then
               !If the grid point has water, convert the "rate" (mg/l) into a mass rate (mg/seconds)
               !WQM%DT_Compute is DTSecond of WaterQuality:time step, in seconds, between 2 WaterQuality calls
               where (Me%ExternalVar%OpenPoints3D == WaterPoint) &
-                    WqRateX%Field = WqRateX%Field * Me%ExternalVar%VolumeZ / Me%Coupled%WQM%DT_Compute
-          
+                    WqRateX%Field = WqRateX%Field * Me%ExternalVar%VolumeZ/ Me%Coupled%WQM%DT_Compute               
+              
               !If CSmodule is activated with biological alkalinity, store the needed rates for it
  i1:          if ((Me%ObjInterfaceCarbSyst == 2) .and. (Me%WQRate_for_CS%Alk_option == 1)) then 
                  call WQrates_for_CS (WqRateX%Field,WqRateX%FirstProp%Name,WqRateX%SecondProp%Name)                  
      i2:         if (Me%ObjBoxDif == 1) then !Also write rates in a box time serie if BOX_TIME_SERIE is activated
-                      call BoxDif(Me%ObjBoxDif,                                           &
+                      call BoxDif(Me%ObjBoxDif,                                             &
                              WqRateX%Field,                                                 &
                              trim(WqRateX%ID%Name),                                         &
                              Me%ExternalVar%OpenPoints3D,                                   &
                              STAT  = STAT_CALL)
                  if (STAT_CALL .NE. SUCCESS_)                                               &
+                 write(*,*)'Rates can not been written as an output without BOX_TIME_SERIE keyword activated'  
+                 write(*,*)'for each property involved in the rate. Rates output is only available'
+                 write(*,*)'with boxes implementation.' 
                  call CloseAllAndStop ('WaterQuality_Processes - ModuleWaterProperties - ERR05')
                  end if i2  
              !If CS is not activated, write rates in a box time serie anyway
@@ -15612,6 +15613,9 @@ cd5:                if (TotalVolume > 0.) then
                              Me%ExternalVar%OpenPoints3D,                                   &
                              STAT  = STAT_CALL)
                  if (STAT_CALL .NE. SUCCESS_)                                               &
+                 write(*,*)'Rates can not been written as an output without BOX_TIME_SERIE keyword activated'  
+                 write(*,*)'for each property involved in the rate. Rates output is only available'
+                 write(*,*)'with boxes implementation.' 
                  call CloseAllAndStop ('WaterQuality_Processes - ModuleWaterProperties - ERR06')
               end if i1   
               
@@ -15633,38 +15637,45 @@ cd5:                if (TotalVolume > 0.) then
     !--------------------------------------------------------------------------
      subroutine WQrates_for_CS (Field_local, First_property, Second_property)
      !External------------------------------------------------------------------     
-     real, pointer, dimension(:,:,:)         :: Field_local
-     character(LEN = StringLength)           :: First_property, Second_property
-     !Begin-----------------------------------------------------------------
+     real, pointer, dimension(:,:,:), intent(IN)  :: Field_local
+     character(LEN = StringLength)  , intent(IN)  :: First_property, Second_property     
+     !Begin-------------------------------------------------------------------
      
-      !Denitrification     
+     !Denitrification: amount of nitrate (mgN)  
       if ((First_property .eq. 'nitrate') .and. (Second_property .eq. 'nitrate')) then        
-        Me%WQRate_for_CS%A_Denit(:,:,:) = Field_local
-      !Nitrification step 1 : amount of ammonia (mg) retired during first nitrification step
-      elseif ((First_property .eq. 'ammonia') .and. (Second_property .eq. 'ammonia')) then         
-        Me%WQRate_for_CS%A_Nitri_1(:,:,:) = Field_local
-      !Nitrification step 2  
-      elseif ((First_property .eq. '') .and. (Second_property .eq. '')) then         
-        Me%WQRate_for_CS%A_Nitri_2(:,:,:) = Field_local 
-      !Primary production based on ammonia
+        Me%WQRate_for_CS%A_Denit =>  Field_local
+        if (.NOT. associated(Me%WQRate_for_CS%A_Denit)) stop 'Subroutine WQrates_for_CS - ModuleWaterProperties. ERR01'
+          
+     !Nitrification step 1 : amount of ammonia (mgN) retired during first nitrification step(negative)
+      elseif ((First_property .eq. 'ammonia') .and. (Second_property .eq. 'ammonia')) then   
+        Me%WQRate_for_CS%A_Nitri_1 =>  Field_local 
+        if (.NOT. associated(Me%WQRate_for_CS%A_Nitri_1)) stop 'Subroutine WQrates_for_CS - ModuleWaterProperties. ERR02'       
+        !write(*,*)'field local in segundos, tiene que coindiri anterior ', Me%WQRate_for_CS%A_Nitri_1(:,17,28) !marta
+         
+     !Nitrification step 2 : amount of nitrite (mgN) retired during second nitrification step (negative)
+     !                       amount of nitrate (mgN) produced '' '' (it is the same, stoichiometry 1:1, but with a positive sign)
+      elseif ((First_property .eq. 'nitrite') .and. (Second_property .eq. 'nitrate')) then         
+        Me%WQRate_for_CS%A_Nitri_2 =>  Field_local 
+        if (.NOT. associated(Me%WQRate_for_CS%A_Nitri_2)) stop 'Subroutine WQrates_for_CS - ModuleWaterProperties. ERR03'    
+        
+     !Primary production based on ammonia
       elseif (First_property .eq. 'grossprod') then!.and. (Second_property .eq. '')) then        
-        Me%WQRate_for_CS%A_PP_ammon(:,:,:) = Field_local
+        !Field_local  => Me%WQRate_for_CS%A_PP_ammon(:,:,:)  
       !Primary production based on nitrate
       !elseif (First_property .eq. 'grossprod') then!.and. (Second_property .eq. '')) then        
-        !Me%WQRate_for_CS%A_PP_nitra(:,:,:) = Field_local
+        !Field_local Me%WQRate_for_CS%A_PP_nitra(:,:,:)  
       !Aerobic mineralization
       elseif((First_property .eq. '') .and. (Second_property .eq. '')) then        
-        Me%WQRate_for_CS%A_aer_mine(:,:,:) = Field_local
+        !Field_local  => Me%WQRate_for_CS%A_aer_mine(:,:,:) 
       !CaCO3 dissolution    
       !elseif((First_property .eq. '') .and. (Second_property .eq. '')) then        
-      !  Me%WQRate_for_CS%A_CaCo3_dis (:,:,:) = Field_local
+      !  Field_local  => Me%WQRate_for_CS%A_CaCo3_dis (:,:,:)  
       !CaCO3 precipitation    
       !elseif((First_property .eq. '') .and. (Second_property .eq. '')) then        
-      !  Me%WQRate_for_CS%A_CaCo3_prec(:,:,:) = Field_local       
+      !  Field_local  => Me%WQRate_for_CS%A_CaCo3_prec(:,:,:)        
      
-      endif      
-      !write(*,*)'tasa es=', Me%WQRate_for_CS%A_Denit(5,2,3)!MARTA
-      !write(*,*)'tasa es=', Me%WQRate_for_CS%A_PP_ammon(:,1,1)!MARTA
+      endif           
+
     !-------------------------------------------------------------------------- 
      end subroutine WQrates_for_CS 
     !-------------------------------------------------------------------------- 
@@ -15906,7 +15917,8 @@ cd5:                if (TotalVolume > 0.) then
                                       OpenPoints3D      = Me%ExternalVar%OpenPoints3D,  &                                      
                                       DWZ               = Me%ExternalVar%DWZ,           &
                                       Latitude          = Me%ExternalVar%Latitude,      &
-                                      Longitude         = Me%ExternalVar%Longitude,     &                                      
+                                      Longitude         = Me%ExternalVar%Longitude,     &
+                                      Rate_Nitrif1      = Me%WQRate_for_CS%A_Nitri_1,   &
                                       STAT              = STAT_CALL)                
                 if (STAT_CALL .NE. SUCCESS_)                                            &
                     call CloseAllAndStop ('CarbonateSystem_Processes - ModuleWaterProperties - ERR01')
