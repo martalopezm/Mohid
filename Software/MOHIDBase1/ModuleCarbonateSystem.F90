@@ -159,9 +159,7 @@
       use ModuleGlobalData
       use ModuleEnterData      
       use ModuleTime
-      use ModuleWaterQuality, only:GetDTWQM
-      use ModuleLife        , only:GetDTLife
-      
+
       implicit none            
       private      
             
@@ -267,7 +265,9 @@
         real, pointer, dimension(:,:)       :: Mass          !Property mass   2D array. Origin: WaterPropertiesModule
         real, pointer, dimension(:  )       :: Latitude      !Latitude        1D array. Origin: HorizontalGridModule
         real, pointer, dimension(:  )       :: Longitude     !Longitude       1D array. Origin: HorizontalGridModule   
-        real, pointer, dimension(:  )       :: Nitrification1!Nitrif1         1D array. Origin: WaterQualityModule  
+        real, pointer, dimension(:  )       :: Nitrification1!Nitrif1         1D array. Origin: WaterQualityModule 
+        real, pointer, dimension(:  )       :: Nitrification2!Nitrif2         1D array. Origin: WaterQualityModule
+        real, pointer, dimension(:  )       :: Denitrification!Denit          1D array. Origin: WaterQualityModule
         integer, pointer, dimension(:  )    :: OpenPoints    !Grid points with water where perform calculations. Origin: MapModule              
       end type T_ExternalVar             !Latitude and latitude are geographic coordenates in decimal format
                                          !Latitude, Longitude, Thickness and OpenPoints are gotten by WaterPropertiesModule
@@ -278,8 +278,8 @@
         integer                                         :: InstanceID
         integer                                         :: ObjEnterData         = 0
         integer, dimension(:), pointer                  :: PropertyList         => null()
-        real                                            :: DT
-        real                                            :: DT_day
+        !real                                            :: DT
+        !real                                            :: DT_day
         type(T_AuxiliarParameters)                      :: AuxParam
         type(T_BioChemParam      )                      :: BioChemParam
         type(T_ComputeOptions    )                      :: ComputeOptions
@@ -558,42 +558,8 @@ cd0 : if (ready_ .EQ. OFF_ERR_) then
         !Local-----------------------------------------------------------------
         integer                                         :: FromFile 
         !Begin-----------------------------------------------------------------
-
-        !DTSecond, time step, in seconds, between 2 module calls (seconds) from WaterQuality or Life Module
-        !if (Me%ComputeOptions%PelagicModel .eq. WaterQualityModel) then 
-            
-            !call GetDTWQM(Me%ObjWaterQuality, DTDay = Me%DT_day, DTSecond = Me%DT, STAT = STAT_CALL)
-             !if (STAT_CALL /= SUCCESS_) then 
-             !write(*,*)'Something went grown when getting the pelagic model time step (DT). Verify you ' 
-             !write(*,*)'have activated the pelagic model in the carbonatesystem.dat file, as well as   '
-             !write(*,*)'the Keyword WATERQUALITY or LIFE for necessary properties in waterproperties.dat file'
-             !stop 'ConstructGlobalVariables - ModuleCarbonateSystem - ERROR #1'
-             !endif             
-             !call GetWQStoichRatios
-        !elseif (Me%ComputeOptions%PelagicModel .eq. LifeModel) then !MARTA CAMBIAR ME%OBJLIFE
-            !call GetDTLife(Me%ObjLife, DTDay = Me%DT_day, DT = Me%DT, STAT = STAT_CALL)
-            !if (STAT_CALL /= SUCCESS_) then 
-            !write(*,*)'Something went grown when getting the pelagic model time step (DT). Verify you  '
-            !write(*,*)'have activated the pelagic model in the carbonatesystem.dat file, as well as    '
-            !write(*,*)'the Keyword WATERQUALITY or LIFE for necessary properties in waterproperties.dat file'
-            !stop 'ConstructGlobalVariables - ModuleCarbonateSystem - ERROR #2'
-            !endif
-        !endif       
         
-        call GetExtractType    (FromFile = FromFile)      
-        !Below it is written the code for reading DT from the carbsyst.dat file. Because this module needs
-        !outputs from other biogeochemical modules, carbonatesystem dt is going to be equal to the model
-        !coupled. However it would be possible to change (which I do not recommend) .
-        call GetData(Me%DT,                                           &
-                     Me%ObjEnterData, iflag,                          &
-                     SearchType   = FromFile,                         &
-                     keyword      = 'DT',                             &
-                     Default      = 3600.,                            &
-                     ClientModule = 'ModuleCarbonateSystem',          &
-                     STAT         = STAT_CALL)
-        if (STAT_CALL .NE. SUCCESS_) stop 'ConstructGlobalVariables - ModuleCarbonateSystem - ERROR #1'
-        !For compatibility with the rest of the program,  DT [sec] converted to DT [day]
-        Me%DT_day      = Me%DT / (3600.*24.)
+        call GetExtractType    (FromFile = FromFile)     
         
         !Nitrogen to Carbon Redfield ratio ( mol N / mol C ) !marta escoges este valor siguiendo a pisces
         call GetData(Me%BioChemParam%Redfield_NC,                     &
@@ -603,7 +569,24 @@ cd0 : if (ready_ .EQ. OFF_ERR_) then
                      Default      = 16./122.,                         &
                      ClientModule = 'ModuleCarbonateSystem',          &
                      STAT         = STAT_CALL)
-        if (STAT_CALL .NE. SUCCESS_) stop 'ConstructGlobalVariables - ModuleCarbonateSystem - ERROR #2'
+        if (STAT_CALL .NE. SUCCESS_) stop 'ConstructGlobalVariables - ModuleCarbonateSystem - ERROR #1'
+        
+        !Below it is written the code for reading DT from the carbsyst.dat file. Because this module needs
+        !outputs from other biogeochemical modules, carbonatesystem dt is going to be equal to the model
+        !coupled. This is done in WaterPropertiesModule. However, it would be possible to change in the future
+        !(which I do not recommend). Uncomment here, in global properties declaration(dt, dt_day),in subroutine
+        !CoupleCarbonateSystem placed in WaterProperties and subroutine GetDTCarbonateSystem placed in this module. 
+        !DTSecond, time step, in seconds, between 2 module calls (seconds) from WaterQuality or Life Module
+        !call GetData(Me%DT,                                           &
+                     !Me%ObjEnterData, iflag,                          &
+                     !SearchType   = FromFile,                         &
+                     !keyword      = 'DT',                             &
+                     !Default      = 3600.,                            &
+                     !ClientModule = 'ModuleCarbonateSystem',          &
+                     !STAT         = STAT_CALL)
+        !if (STAT_CALL .NE. SUCCESS_) stop 'ConstructGlobalVariables - ModuleCarbonateSystem - ERROR #1'
+        !For compatibility with the rest of the program,  DT [sec] converted to DT [day]
+        !Me%DT_day      = Me%DT / (3600.*24.)
   !---------------------------------------------------------------------------  
    end subroutine ConstructGlobalVariables
   !::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
@@ -698,7 +681,9 @@ cd0 : if (ready_ .EQ. OFF_ERR_) then
   
    !> @author: Marta López, Maretec
    !> @Brief: Sends the CarbonateSysteMmodule time step and daily time step 
-   !> to the module that need it (InterfaceModule)
+   !> to the module that need it (InterfaceModule). This subroutine is build 
+   !> because of the MOHID structure, but actually the value is irrelevant 
+   !> because once DT is acquired by WProperties, there is equalized to WQDT
    !::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::: 
   
    subroutine GetDTCarbonateSystem(CarbonateSystem_ID, DTDay, DT, STAT)
@@ -719,8 +704,8 @@ cd0 : if (ready_ .EQ. OFF_ERR_) then
         
 cd1 :   if ((ready_ .EQ. IDLE_ERR_     ) .OR.                                 &
             (ready_ .EQ. READ_LOCK_ERR_)) then
-            if (present(DTDay   )) DTDay    = Me%DT_Day
-            if (present(DT)) DT             = Me%DT
+            if (present(DTDay   )) DTDay    = 0.02  !DT_day
+            if (present(DT)) DT             = 1800. !DT
             STAT_ = SUCCESS_
         else 
             STAT_ = ready_
@@ -919,6 +904,8 @@ if1 :   if ((ready_ .EQ. IDLE_ERR_     ) .OR.                                 &
                                      Latitude,                                   &
                                      Longitude,                                  &
                                      Rate_Nitrif1,                               &
+                                     Rate_Nitrif2,                               &
+                                     Rate_Denit,                                 &
                                      STAT)
     !Arguments-------------------------------------------------------------------------    
       integer                                                   :: ObjCarbonateSystemID
@@ -930,6 +917,8 @@ if1 :   if ((ready_ .EQ. IDLE_ERR_     ) .OR.                                 &
       real,               pointer, intent(IN), dimension(:  )   :: Latitude
       real,               pointer, intent(IN), dimension(:  )   :: Longitude
       real,               pointer, intent(IN), dimension(:  )   :: Rate_Nitrif1
+      real,               pointer, intent(IN), dimension(:  )   :: Rate_Nitrif2
+      real,               pointer, intent(IN), dimension(:  )   :: Rate_Denit
       type(T_Size1D)             , intent(IN)                   :: ArraySize
       integer, optional,           intent(OUT)                  :: STAT           
     !Local------------------------------------------------------------------------------      
@@ -967,7 +956,13 @@ if1 :   if ((ready_ .EQ. IDLE_ERR_     ) .OR.                                 &
             Me%ExternalVar%Nitrification1              => Rate_Nitrif1
             if (.NOT. associated(Me%ExternalVar%Nitrification1))           &
               stop 'Subroutine ModifyCarbonateSystem - ModuleCarbonateSystem. ERR08'
-                          
+            Me%ExternalVar%Nitrification2              => Rate_Nitrif2
+            if (.NOT. associated(Me%ExternalVar%Nitrification2))           &
+              stop 'Subroutine ModifyCarbonateSystem - ModuleCarbonateSystem. ERR09'
+            Me%ExternalVar%Denitrification              => Rate_Denit
+            if (.NOT. associated(Me%ExternalVar%Denitrification))          &
+              stop 'Subroutine ModifyCarbonateSystem - ModuleCarbonateSystem. ERR10'
+           
             !Associates array dimension (external) to array dimension variable of this module(Me%Array%) 
             Me%Array%ILB = ArraySize%ILB
             Me%Array%IUB = ArraySize%IUB
@@ -996,6 +991,8 @@ d1:         do index = Me%Array%ILB, Me%Array%IUB
             nullify(Me%ExternalVar%Latitude   )  
             nullify(Me%ExternalVar%Longitude  ) 
             nullify(Me%ExternalVar%Nitrification1)
+            nullify(Me%ExternalVar%Nitrification2)
+            nullify(Me%ExternalVar%Denitrification)
             
             STAT_ = SUCCESS_
         else               
@@ -1050,7 +1047,8 @@ d1:         do index = Me%Array%ILB, Me%Array%IUB
   
  !>@author Marta López, Maretec
  !>@Brief:
- !> Calculates alkalinity values through algorithms proposed by Lee.et al 2006
+ !> Calculates alkalinity values through algorithms proposed by Lee.et al 2006.
+ !> Alkalinity units: umol/kg 
  !>@param[in] index 
  !::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::: 
   
@@ -1217,46 +1215,78 @@ i3:     if (temp > 20.) then
      integer, intent(IN) :: index   
     !Local--------------------------------------------------------------------    
      real                :: Red_NC        !Nitrogen to Carbon Redfield ratio 
+     !real                :: yN           !Mean N/C stoichometry ratio used by phyto and diatoms
+     !real                :: yp           !Mean N/P stoichometry ratio used by phyto and diatoms
      real                :: Nitrif1       !Nitrif1 
-     !real               :: Nitrif2       !Nitrif2 
+     real                :: Nitrif2       !Nitrif2 
+     real                :: Denit         !Denitrification
     !-------------------------------------------------------------------------    
      Red_NC  = Me%BioChemParam%Redfield_NC    !     
      !yN_p                    !Phytoplankton N/C Refield stoichometry used in WQmodule
      !yN_p_life               !Phytoplankton N/C Refield stoichometry used in Life
      !yP_p                    !Phytoplankton P/C Refield stoichometry used in WQmodule
-     !yP_p_life               !Phytoplankton P/C Refield stoichometry used in Life
-     !yN_d                    !Diatoms N/C Refield stoichometry used in WQmodule
-     !yN_d_life               !Diatoms N/C Refield stoichometry used in Life
-     !yP_d                    !Diatoms P/C Refield stoichometry used in WQmodule
-     !yP_d_life               !Diatoms P/C Refield stoichometry used in Life
+
    !---------------------------------------------------------------------------                                                                                       
      
-    !Rates are mass rates in mg/seconds (mg/WQDT_seconds). Conversion to moles and timeless
-
-    ![molesN]                        [mgN/sec]        [sec]   [g/mg]  /        [gN/molN]
-      Nitrif1 = Me%ExternalVar%Nitrification1(index) * Me%DT * 0.001 / Me%AuxParam%N_AtomicMass 
-     !Nitrif2 = Me%ExternalVar%Nitrification2(index) * Me%DT * 0.001 / Me%AuxParam%N_AtomicMass  
+     !Rates are mass rates in mg/seconds (mg/WQDT_seconds). Conversion to moles (i.e. amount of moles prod/retired within the time step, in seconds).
+     !Cuanto se ha creado/destruido en cada instante temporal (contabilizado en segundos) 
      
+     ![mmolesN]                       [mgN/dtsec]    /     [mgN/mmolN]                        
+      Nitrif1 = Me%ExternalVar%Nitrification1 (index) / Me%AuxParam%N_AtomicMass      
+      Nitrif2 = Me%ExternalVar%Nitrification2 (index) / Me%AuxParam%N_AtomicMass
+      Denit   = Me%ExternalVar%Denitrification(index) / Me%AuxParam%N_AtomicMass
+      
+      ![umolesN] = [mmolesN] * 10^3 
+      Nitrif1    = -Nitrif1 / 0.001  !With a minus, to convert the values of ammonia retired (in negative) to positive
+      Nitrif2    = Nitrif2 / 0.001 
+      Denit      = Denit   / 0.001 
+
+
      
  i1:  IF (Me%ComputeOptions%DIC_calcification) THEN                       !Calculate changes in alk including calcite prec/dis  
      
-  i2:     if (Me%ComputeOptions%PelagicModel .eq. WaterQualityModel) then 
-      
-             Me%ExternalVar%Mass(Me%PropIndex%ALK_cs_b, Index) = Me%ExternalVar%Mass(Me%PropIndex%ALK_cs_b, Index) !&    
+  i2:     if (Me%ComputeOptions%PelagicModel .eq. WaterQualityModel) then       
+    !i3:     if (Me%ExternalVar%Diatoms_are_activated == 0)     
+             Me%ExternalVar%Mass(Me%PropIndex%ALK_cs_b, Index) = Me%ExternalVar%Mass(Me%PropIndex%ALK_cs_b, Index) &    
              !                                            + ((0.8 + yN + yP) * Red_NC * DenitRate        &    ! <- sources
              !                                            + (yN + yP) * Red_NC * PPbasedonnitrate        & 
              !                                            + (yN - yP) * Red_NC * AerobicMineral          &
              !                                            + 2. * CaCo3Disolution                         &
-             !                                            - (2.* Red_NC * (- Nitrif1 + Nitrif2 ))        &    ! <- sinks                                   
-             !                                            + 2. * CaCo3Precipitation
-             !                                            + (yP - yN) * Red_NC * PPbasedonammonia) !* Me%DT_day no pillo porqué
-                  
+                                                          - Red_NC * Nitrif1                            &  ! <- sinks
+                                                          - Red_NC * Nitrif2
+             !                                            - (2.* Red_NC * (- Nitrif1 - Nitrif2 )) MAAAL  !&                                       
+             !                                            - 2. * CaCo3Precipitation    
+            ! Y aquí??? deberíamultiplicar por la densidad??? - (2.* Red_NC * (- Nitrif1 - Nitrif2 )) MAAAL  !&   
+             
+            !elseif(Me%ExternalVar%Diatoms_are_activated == 1)  
+            !yN_d = Me%External...   !Diatoms N/C Refield stoichometry used in WQmodule
+            !yP_d = Me%External...   !Diatoms P/C Refield stoichometry used in WQmodule
+            !yN = (yN_p + yN_d) / 2.
+            !yP = (yP_p + yP_d) / 2.
+      
+             !Me%ExternalVar%Mass(Me%PropIndex%ALK_cs_b, Index) = Me%ExternalVar%Mass(Me%PropIndex%ALK_cs_b, Index) &    
+             !                                            + ((0.8 + yN + yP) * Red_NC * DenitRate             &    ! <- sources
+             !                                            + (yN_p + yP_p) * Red_NC * PPbasedonnitrate_phyt    & 
+             !                                            + (yN_d + yP_d) * Red_NC * PPbasedonnitrate_diat    &
+             !                                            + (yN_p - yP_p) * Red_NC * AerobicMineral           &
+             !                                            + (yN_d - yP_d) * Red_NC * AerobicMineral_diat      &
+             !                                            + 2. * CaCo3Disolution                              &
+             !                                             - Red_NC * -Nitrif1                                 &  ! <- sinks
+             !                                             - Red_NC * Nitrif2                                          
+             !                                            - 2. * CaCo3Precipitation
+             !                                            - (yP_p - yN_p) * Red_NC * PPbasedonammonia_phyto) 
+             !                                            - (yP_d - yN_d) * Red_NC * PPbasedonammonia_diat) 
+             !endif i3                
+             
           elseif (Me%ComputeOptions%PelagicModel .eq. LifeModel) then
+                !yP_p_life               !Phytoplankton P/C Refield stoichometry used in Life
+                !yN_d_life               !Diatoms N/C Refield stoichometry used in Life     
+                !yP_d_life               !Diatoms P/C Refield stoichometry used in Life                 
           endif i2          
 
       ELSEIF (Me%ComputeOptions%DIC_no_calcification) THEN                 !Not include changes due to calcite prec/dis  
      
-  i3:     if (Me%ComputeOptions%PelagicModel .eq. WaterQualityModel) then
+  i4:     if (Me%ComputeOptions%PelagicModel .eq. WaterQualityModel) then
       
              Me%ExternalVar%Mass(Me%PropIndex%ALK_cs_b, Index) = Me%ExternalVar%Mass(Me%PropIndex%ALK_cs_b, Index)  !  &    
              !                                                  + ((0.8 + yN + yP) * Red_NC * DenitRate        &    ! <- sources
@@ -1266,7 +1296,7 @@ i3:     if (temp > 20.) then
              !                                                  + (yP - yN) * Red_NC * PPbasedonammonia)! * Me%DT_day  no pillo porqué
       
           elseif (Me%ComputeOptions%PelagicModel .eq. LifeModel) then
-          endif i3          
+          endif i4          
 
       ENDIF i1
       

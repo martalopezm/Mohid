@@ -5526,11 +5526,10 @@ do1 :   do while (associated(PropertyX))
                                 Vertical1D          = Me%ExternalVar%Vertical1D,     &
                                 STAT = STAT_CALL)
         if (STAT_CALL /= SUCCESS_)                                                   &
-            call CloseAllAndStop ('CoupleWaterQuality - ModuleWaterProperties - ERR01')
-
+            call CloseAllAndStop ('CoupleWaterQuality - ModuleWaterProperties - ERR01')       
+        
         Me%Coupled%WQM%DT_Compute  = WaterQualityDT
         Me%Coupled%WQM%NextCompute = Me%ExternalVar%Now
-        !write(*,*) 'wqpropertylist = ',WaterQualityPropertyList
         deallocate(WaterQualityPropertyList)
         nullify   (WaterQualityPropertyList)
 
@@ -6432,15 +6431,15 @@ cd12 :       if (BlockFound) then
                                 WaterPoints3D       = Me%ExternalVar%WaterPoints3D,  &
                                 Size3D              = Me%WorkSize,                   &
                                 Vertical1D          = Me%ExternalVar%Vertical1D,     &
-                                CarbonateSystemID   = CarbonateSystemID,             & !marta
-                                STAT = STAT_CALL)
+                                CarbonateSystemID   = CarbonateSystemID,             & !marta: CS needs a proper ID because if not module Interface
+                                STAT = STAT_CALL)                                      !does not allow to couple two biogeochem modules ( 
         if (STAT_CALL /= SUCCESS_)                                                   &
             call CloseAllAndStop ('CoupleCarbonateSystem- ModuleWaterProperties - ERR01')
 
         Me%ObjCarbonateSystem = AssociateInstance (mCarbonateSystem_, CarbonateSystemID) !marta
-        Me%Coupled%CarbonateSystem%DT_Compute   = CarbonateSystemDT
-        Me%Coupled%CarbonateSystem%NextCompute  = Me%ExternalVar%Now
-        
+        !Me%Coupled%CarbonateSystem%DT_Compute   = CarbonateSystemDT
+        Me%Coupled%CarbonateSystem%DT_Compute   = Me%Coupled%WQM%DT_Compute
+        Me%Coupled%CarbonateSystem%NextCompute  = Me%ExternalVar%Now        
         
         deallocate(CarbonateSystemPropertyList)
         nullify   (CarbonateSystemPropertyList)
@@ -15585,7 +15584,7 @@ cd5:                if (TotalVolume > 0.) then
               if (STAT_CALL .NE. SUCCESS_)                                                &
               call CloseAllAndStop ('WaterQuality_Processes - ModuleWaterProperties - ERR04')
               
-              !If the grid point has water, convert the "rate" (mg/l) into a mass rate (mg/seconds)
+              !If the grid point has water, convert the "rate" (mg/l) into a mass rate (mg/dtsec)
               !WQM%DT_Compute is DTSecond of WaterQuality:time step, in seconds, between 2 WaterQuality calls
               where (Me%ExternalVar%OpenPoints3D == WaterPoint) &
                     WqRateX%Field = WqRateX%Field * Me%ExternalVar%VolumeZ/ Me%Coupled%WQM%DT_Compute               
@@ -15641,7 +15640,7 @@ cd5:                if (TotalVolume > 0.) then
      character(LEN = StringLength)  , intent(IN)  :: First_property, Second_property     
      !Begin-------------------------------------------------------------------
      
-     !Denitrification: amount of nitrate (mgN)  
+     !Denitrification: amount of nitrate (mgN) retired during denitrification (negative)
       if ((First_property .eq. 'nitrate') .and. (Second_property .eq. 'nitrate')) then        
         Me%WQRate_for_CS%A_Denit =>  Field_local
         if (.NOT. associated(Me%WQRate_for_CS%A_Denit)) stop 'Subroutine WQrates_for_CS - ModuleWaterProperties. ERR01'
@@ -15652,8 +15651,8 @@ cd5:                if (TotalVolume > 0.) then
         if (.NOT. associated(Me%WQRate_for_CS%A_Nitri_1)) stop 'Subroutine WQrates_for_CS - ModuleWaterProperties. ERR02'       
         !write(*,*)'field local in segundos, tiene que coindiri anterior ', Me%WQRate_for_CS%A_Nitri_1(:,17,28) !marta
          
-     !Nitrification step 2 : amount of nitrite (mgN) retired during second nitrification step (negative)
-     !                       amount of nitrate (mgN) produced '' '' (it is the same, stoichiometry 1:1, but with a positive sign)
+     !Nitrification step 2 : amount of nitrate (mgN) produced during second nitrification step (positive)
+     !                       amount of nitrite (mgN) retired '' '' (is the same, stoichiometry 1:1, but with a negative sign)
       elseif ((First_property .eq. 'nitrite') .and. (Second_property .eq. 'nitrate')) then         
         Me%WQRate_for_CS%A_Nitri_2 =>  Field_local 
         if (.NOT. associated(Me%WQRate_for_CS%A_Nitri_2)) stop 'Subroutine WQrates_for_CS - ModuleWaterProperties. ERR03'    
@@ -15667,6 +15666,7 @@ cd5:                if (TotalVolume > 0.) then
       !Aerobic mineralization
       elseif((First_property .eq. '') .and. (Second_property .eq. '')) then        
         !Field_local  => Me%WQRate_for_CS%A_aer_mine(:,:,:) 
+          
       !CaCO3 dissolution    
       !elseif((First_property .eq. '') .and. (Second_property .eq. '')) then        
       !  Field_local  => Me%WQRate_for_CS%A_CaCo3_dis (:,:,:)  
@@ -15919,12 +15919,16 @@ cd5:                if (TotalVolume > 0.) then
                                       Latitude          = Me%ExternalVar%Latitude,      &
                                       Longitude         = Me%ExternalVar%Longitude,     &
                                       Rate_Nitrif1      = Me%WQRate_for_CS%A_Nitri_1,   &
+                                      Rate_Nitrif2      = Me%WQRate_for_CS%A_Nitri_2,   &
+                                      Rate_Denit        = Me%WQRate_for_CS%A_Denit,     &
                                       STAT              = STAT_CALL)                
                 if (STAT_CALL .NE. SUCCESS_)                                            &
                     call CloseAllAndStop ('CarbonateSystem_Processes - ModuleWaterProperties - ERR01')
                 PropertyX => PropertyX%Next
             end do
+            write(*,*)'dtcarbonsystem=',Me%Coupled%CarbonateSystem%DT_Compute
             Me%Coupled%CarbonateSystem%NextCompute = Me%Coupled%CarbonateSystem%NextCompute + Me%Coupled%CarbonateSystem%DT_Compute
+
         end if
         !Second call. Performs the calculations
         PropertyX => Me%FirstProperty

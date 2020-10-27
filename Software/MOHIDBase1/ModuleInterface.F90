@@ -254,7 +254,8 @@ Module ModuleInterface
         real,    pointer, dimension(:    )      :: Latitude1D                => null() !MartaLopez
         real,    pointer, dimension(:    )      :: Longitude1D               => null() !MartaLopez
         real,    pointer, dimension(:    )      :: Rate_Nitrif1_1D           => null() !MartaLopez
-        
+        real,    pointer, dimension(:    )      :: Rate_Nitrif2_1D           => null() !MartaLopez
+        real,    pointer, dimension(:    )      :: Rate_Denit_1D             => null() !MartaLopez
         
 #ifdef _PHREEQC_        
         real,    pointer, dimension(:    )      :: WaterSaturation          => null()
@@ -1226,11 +1227,19 @@ cd0 :   if (ready_ .EQ. OFF_ERR_) then
                 allocate(Me%Rate_Nitrif1_1D(ArrayLB:ArrayUB), STAT = STAT_CALL)
                 if (STAT_CALL .NE. SUCCESS_)stop 'AllocateVariables - ModuleInterface - ERR164' 
                 
+                allocate(Me%Rate_Nitrif2_1D(ArrayLB:ArrayUB), STAT = STAT_CALL)
+                if (STAT_CALL .NE. SUCCESS_)stop 'AllocateVariables - ModuleInterface - ERR165' 
+                
+                allocate(Me%Rate_Denit_1D(ArrayLB:ArrayUB), STAT = STAT_CALL)
+                if (STAT_CALL .NE. SUCCESS_)stop 'AllocateVariables - ModuleInterface - ERR166' 
+                
                 Me%Salinity             = FillValueReal
                 Me%Thickness            = FillValueReal
                 Me%Latitude1D           = FillValueReal
                 Me%Longitude1D          = FillValueReal
                 Me%Rate_Nitrif1_1D      = FillValueReal
+                Me%Rate_Nitrif2_1D      = FillValueReal
+                Me%Rate_Denit_1D        = FillValueReal
                 
             case default
                 write(*,*) 
@@ -2096,12 +2105,12 @@ cd1 :           if(STAT_CALL .EQ. KEYWORD_NOT_FOUND_ERR_) then
 
 cd1 :           if (Phyto) then 
                     if (.not.FindProperty(PropertiesList, Phytoplankton_))          &
-                        stop 'WQM needs property phytoplankton - Check_Options'
+                        stop 'WQM needs property phytoplankton - Check_Options - ModuleInterface'
                 end if cd1
 
 cd2 :           if (Zoo) then
                     if (.not.FindProperty(PropertiesList, Zooplankton_))            &
-                        stop 'WQM needs property zooplankton - Check_Options'
+                        stop 'WQM needs property zooplankton - Check_Options - ModuleInterface'
                 end if cd2
 
 !                Larvae is not a waterproperty but lagrangian
@@ -2113,76 +2122,76 @@ cd2 :           if (Zoo) then
 cd5 :           if (Phosphorus) then
 
                     if (.not.FindProperty(PropertiesList, POP_))                    &
-                        stop 'WQM needs property particulate organic phosphorus - Check_Options'
+                        stop 'WQM needs property particulate organic phosphorus - Check_Options - ModuleInterface'
 
                     if (.not.FindProperty(PropertiesList, DOPRefractory_))          &
-                        stop 'WQM needs property dissolved refractory organic phosphorus - Check_Options'
+                        stop 'WQM needs property dissolved refractory organic phosphorus - Check_Options - ModuleInterface'
 
                     if (.not. FindProperty(PropertiesList, DOPNon_Refractory_))     &
-                        stop 'WQM needs property dissolved non-refractory organic phosphorus - Check_Options'
+                        stop 'WQM needs property dissolved non-refractory organic phosphorus - Check_Options - ModuleInterface'
 
                     if (.not.FindProperty(PropertiesList, Inorganic_Phosphorus_))   &
-                        stop 'WQM needs property inorganic phosphorus - Check_Options'
+                        stop 'WQM needs property inorganic phosphorus - Check_Options - ModuleInterface'
                 end if cd5
 
 cd6 :           if (Nitrogen) then
                     if (.not.FindProperty(PropertiesList, PON_))                    &
-                        stop 'WQM needs property particulate organic nitrogen - Check_Options'
+                        stop 'WQM needs property particulate organic nitrogen - Check_Options- ModuleInterface'
                         
                     if (Bacteria .and. .not.FindProperty(PropertiesList, PONRefractory_))          &
-                        stop 'WQM needs property particulate refractory organic nitrogen - Check_Options'
+                        stop 'WQM needs property particulate refractory organic nitrogen - Check_Options- ModuleInterface'
 
                     if (.not.FindProperty(PropertiesList, DONRefractory_))          &
-                        stop 'WQM needs property dissolved refractory organic nitrogen - Check_Options'
+                        stop 'WQM needs property dissolved refractory organic nitrogen - Check_Options- ModuleInterface'
 
                     if (.not. FindProperty(PropertiesList, DONNon_Refractory_))     &
-                        stop 'WQM needs property dissolved non-refractory organic nitrogen - Check_Options'
+                        stop 'WQM needs property dissolved non-refractory organic nitrogen - Check_Options- ModuleInterface'
 
                     if (.not.FindProperty(PropertiesList, Ammonia_))                &
-                        stop 'WQM needs property ammonia - Check_Options'
+                        stop 'WQM needs property ammonia - Check_Options- ModuleInterface'
 
                     if (.not.FindProperty(PropertiesList, Nitrate_))                &
-                        stop 'WQM needs property nitrate - Check_Options'
+                        stop 'WQM needs property nitrate - Check_Options- ModuleInterface'
 
                     if (.not.FindProperty(PropertiesList, Nitrite_))                &
-                        stop 'WQM needs property nitrite - Check_Options'
+                        stop 'WQM needs property nitrite - Check_Options- ModuleInterface'
                 end if cd6
 
 cd7 :           if (BOD) then
                     if (.not.FindProperty(PropertiesList, BOD_))                    &
-                        stop 'WQM needs property biochemical oxygen demand - Check_Options'
+                        stop 'WQM needs property biochemical oxygen demand - Check_Options- ModuleInterface'
                 end if cd7
 
 
 cd8 :           if (Bacteria) then
                     if (.not.FindProperty(PropertiesList, Bacteria_))               &
-                        stop 'WQM needs property bacteria - Check_Options'
+                        stop 'WQM needs property bacteria - Check_Options- ModuleInterface'
                 end if cd8
 
 
 cd9 :           if (Ciliate) then
                     if (.not.FindProperty(PropertiesList, Ciliate_))                &
-                        stop 'WQM needs property ciliate - Check_Options'
+                        stop 'WQM needs property ciliate - Check_Options- ModuleInterface'
                 end if cd9
 
 
 cd12 :          if (Diatoms) then
                     if (.not.FindProperty(PropertiesList, Diatoms_))                &
-                        stop 'WQM needs property diatoms - Check_Options'
+                        stop 'WQM needs property diatoms - Check_Options- ModuleInterface'
                 end if cd12
 
 cd13 :          if (Silica) then
                     if (.not.FindProperty(PropertiesList, DSilica_))                &
-                        stop 'WQM needs property diatoms - Check_Options'
+                        stop 'WQM needs property diatoms - Check_Options- ModuleInterface'
 
                     if (.not.FindProperty(PropertiesList, BioSilica_))               &
-                        stop 'WQM needs property diatoms - Check_Options'
+                        stop 'WQM needs property diatoms - Check_Options- ModuleInterface'
                 end if cd13
 
                 !If one wants to run just the age property oxygen is not needed - Frank 09-2003
                 if (Phosphorus .or. BOD .or. Ciliate .or. Nitrogen .or. Bacteria) then
                     if (.not.FindProperty(PropertiesList, Oxygen_))                     &
-                        stop 'WQM needs property oxygen - Check_Options'
+                        stop 'WQM needs property oxygen - Check_Options- ModuleInterface'
                 endif
 
 cd50 :         if(.NOT.(Pompools)) then
@@ -2192,7 +2201,7 @@ cd50 :         if(.NOT.(Pompools)) then
                     FindProperty(PropertiesList, PON5_) .OR. FindProperty(PropertiesList, POP1_) .OR. &
                     FindProperty(PropertiesList, POP2_) .OR. FindProperty(PropertiesList, POP3_) .OR. &
                     FindProperty(PropertiesList, POP4_) .OR. FindProperty(PropertiesList, POP5_))     &
-                        stop 'WQM needs the POM pools option activated - Check_Options'
+                        stop 'WQM needs the POM pools option activated - Check_Options- ModuleInterface'
 
                end if cd50
 
@@ -2200,43 +2209,43 @@ cd60 :         if (Pompools) then
                  
                  if (Nitrogen) then
                     if (.not.FindProperty(PropertiesList, PON1_))                    &
-                        stop 'WQM with POM pools needs property PON1 - Check_Options'
+                        stop 'WQM with POM pools needs property PON1 - Check_Options- ModuleInterface'
                     
                     if (.not.FindProperty(PropertiesList, PON2_))                    &
-                        stop 'WQM with POM pools needs property PON2 - Check_Options'    
+                        stop 'WQM with POM pools needs property PON2 - Check_Options- ModuleInterface'    
                     
                     if (.not.FindProperty(PropertiesList, PON3_))                    &
-                        stop 'WQM with POM pools needs property PON3 - Check_Options'
+                        stop 'WQM with POM pools needs property PON3 - Check_Options- ModuleInterface'
                     
                     if (.not.FindProperty(PropertiesList, PON4_))                    &
-                        stop 'WQM with POM pools needs property PON4 - Check_Options'
+                        stop 'WQM with POM pools needs property PON4 - Check_Options- ModuleInterface'
                         
                     if (.not.FindProperty(PropertiesList, PON5_))                    &
-                        stop 'WQM with POM pools needs property PON5 - Check_Options'
+                        stop 'WQM with POM pools needs property PON5 - Check_Options- ModuleInterface'
                             
                   end if
                   
                   if (Phosphorus) then
                      
                      if (.not.FindProperty(PropertiesList, POP1_))                    &
-                        stop 'WQM with POM pools needs property POP1 - Check_Options'
+                        stop 'WQM with POM pools needs property POP1 - Check_Options- ModuleInterface'
                     
                     if (.not.FindProperty(PropertiesList, POP2_))                    &
-                        stop 'WQM with POM pools needs property POP2 - Check_Options'    
+                        stop 'WQM with POM pools needs property POP2 - Check_Options- ModuleInterface'    
                     
                     if (.not.FindProperty(PropertiesList, POP3_))                    &
-                        stop 'WQM with POM pools needs property POP3 - Check_Options'
+                        stop 'WQM with POM pools needs property POP3 - Check_Options- ModuleInterface'
                     
                     if (.not.FindProperty(PropertiesList, POP4_))                    &
-                        stop 'WQM with POM pools needs property POP4 - Check_Options'
+                        stop 'WQM with POM pools needs property POP4 - Check_Options- ModuleInterface'
                         
                     if (.not.FindProperty(PropertiesList, POP5_))                    &
-                        stop 'WQM with POM pools needs property POP5 - Check_Options'
+                        stop 'WQM with POM pools needs property POP5 - Check_Options- ModuleInterface'
                         
                   end if
                   
                   if (.NOT. Zoo) then
-                    stop 'WQM with POM pools needs property Zoo - Check_Options'
+                    stop 'WQM with POM pools needs property Zoo - Check_Options- ModuleInterface'
                   end if 
                   
                 end if cd60
@@ -2275,40 +2284,40 @@ cd60 :         if (Pompools) then
 cd10 :           if (Nitrogen) then
                    
                     if (.not.FindProperty(PropertiesList, Ammonia_)              )   &
-                        stop 'SQM needs property "ammonia" - Check_Options'
+                        stop 'SQM needs property "ammonia" - Check_Options- ModuleInterface'
 
                     if (.not.FindProperty(PropertiesList, Nitrate_)              )   &
-                        stop 'SQM needs property "nitrate" - Check_Options'
+                        stop 'SQM needs property "nitrate" - Check_Options- ModuleInterface'
 
                     !if (.not.FindProperty(PropertiesList, AdsorbedAmmonia_)     )   &
                      !   STOP 'WQM needs property Adsorbed Ammonia - Check_Options'
                     
                     if (.not.FindProperty(PropertiesList, RefreactaryOrganicN_)  )   &
-                        stop 'SQM needs property "particulated refractory organic nitrogen" - Check_Options'
+                        stop 'SQM needs property "particulated refractory organic nitrogen" - Check_Options- ModuleInterface'
 
                     if (.not.FindProperty(PropertiesList, PON_           )       )   &
-                        stop 'SQM needs property "particulate organic nitrogen" - Check_Options'
+                        stop 'SQM needs property "particulate organic nitrogen" - Check_Options- ModuleInterface'
 
                     if (.not.FindProperty(PropertiesList, Ngas_)                 )   &
-                        stop 'SQM needs property "nitrogen gas" - Check_Options'
+                        stop 'SQM needs property "nitrogen gas" - Check_Options- ModuleInterface'
 
                     if (.not.FindProperty(PropertiesList, HeterotrophicN_)       )   &
-                        stop 'SQM needs property "heterotrophic microorganism nitrogen" - Check_Options'
+                        stop 'SQM needs property "heterotrophic microorganism nitrogen" - Check_Options- ModuleInterface'
 
                     if (.not.FindProperty(PropertiesList, AnaerobicN_)           )   &
-                        stop 'SQM needs property "anaerobic microorganism nitrogen" - Check_Options'
+                        stop 'SQM needs property "anaerobic microorganism nitrogen" - Check_Options- ModuleInterface'
 
                     if (.not.FindProperty(PropertiesList, AutotrophicN_)         )   &
-                        STOP 'SQM needs property "autotrophic microorganism nitrogen" - Check_Options'
+                        STOP 'SQM needs property "autotrophic microorganism nitrogen" - Check_Options- ModuleInterface'
 
                     if (.not.FindProperty(PropertiesList, Urea_)                 )   &
-                        STOP 'SQM needs property "urea" - Check_Options'
+                        STOP 'SQM needs property "urea" - Check_Options- ModuleInterface'
 
 !                    if (.not.FindProperty(PropertiesList, AmmoniaGas_)          )   &
 !                        STOP 'SQM needs property "ammonia gas" - Check_Options'
                     if (Sol_Bacteria) then
                         if (.not.FindProperty(PropertiesList, SolubilizingN_)    )   &
-                            STOP 'SQM needs property "solubilizing microorganism nitrogen" - Check_Options'
+                            STOP 'SQM needs property "solubilizing microorganism nitrogen" - Check_Options- ModuleInterface'
                     end if
 
                 end if cd10
@@ -2316,29 +2325,29 @@ cd10 :           if (Nitrogen) then
 cd11 :          if (Carbon) then
                    
                     if (.not.FindProperty(PropertiesList, LabileOrganicC_)       )   &
-                        stop 'SQM needs property "particulate labile organic carbon" - Check_Options'
+                        stop 'SQM needs property "particulate labile organic carbon" - Check_Options- ModuleInterface'
 
                     if (.not.FindProperty(PropertiesList, RefreactaryOrganicC_)  )   &
-                        stop 'SQM needs property "particulated refractory organic carbon" - Check_Options'
+                        stop 'SQM needs property "particulated refractory organic carbon" - Check_Options- ModuleInterface'
 
                     if (.not.FindProperty(PropertiesList, HeterotrophicC_)       )   &
-                        stop 'SQM needs property "heterotrophic microorganism carbon" - Check_Options'
+                        stop 'SQM needs property "heterotrophic microorganism carbon" - Check_Options- ModuleInterface'
 
                     if (.not.FindProperty(PropertiesList, AnaerobicC_)           )   &
-                        stop 'SQM needs property "anaerobic microorganism carbon" - Check_Options'
+                        stop 'SQM needs property "anaerobic microorganism carbon" - Check_Options- ModuleInterface'
                     
                     if (.not.FindProperty(PropertiesList, AutotrophicC_)         )   &
-                        stop 'SQM needs property "autotrophic microorganism carbon" - Check_Options'
+                        stop 'SQM needs property "autotrophic microorganism carbon" - Check_Options- ModuleInterface'
                     
 !                    if (.not.FindProperty(PropertiesList, Methane_)         )   &
 !                        stop 'SQM needs property "methane" - Check_Options'
 
                     if (.not.FindProperty(PropertiesList, CarbonDioxide_)         )   &
-                        stop 'SQM needs property "carbon dioxide" - Check_Options'
+                        stop 'SQM needs property "carbon dioxide" - Check_Options- ModuleInterface'
                     
                     if (Sol_Bacteria) then
                         if (.not.FindProperty(PropertiesList, SolubilizingC_)    )   &
-                            STOP 'SQM needs property "solubilizing microorganism carbon" - Check_Options'
+                            STOP 'SQM needs property "solubilizing microorganism carbon" - Check_Options- ModuleInterface'
                     end if
 
 
@@ -2347,48 +2356,48 @@ cd11 :          if (Carbon) then
 cd14 :          if (Phosphorus) then
                    
                     if (.not.FindProperty(PropertiesList, Inorganic_Phosphorus_)              )   &
-                        stop 'SQM needs property "inorganic phosphorus" - Check_Options'
+                        stop 'SQM needs property "inorganic phosphorus" - Check_Options- ModuleInterface'
 
                     if (.not.FindProperty(PropertiesList, AdsorbedInorganicP_)              )   &
-                        stop 'SQM needs property "particulated inorganic phosphorus" - Check_Options'
+                        stop 'SQM needs property "particulated inorganic phosphorus" - Check_Options- ModuleInterface'
 
                     if (.not.FindProperty(PropertiesList, RefreactaryOrganicP_)  )   &
-                        stop 'SQM needs property "particulated refractory organic phosphorus" - Check_Options'
+                        stop 'SQM needs property "particulated refractory organic phosphorus" - Check_Options- ModuleInterface'
 
                     if (.not.FindProperty(PropertiesList, POP_           )       )   &
-                        stop 'SQM needs property "particulate organic phosphorus" - Check_Options'
+                        stop 'SQM needs property "particulate organic phosphorus" - Check_Options- ModuleInterface'
 
                     if (.not.FindProperty(PropertiesList, HeterotrophicP_)       )   &
-                        stop 'SQM needs property "heterotrophic microorganism phosphorus" - Check_Options'
+                        stop 'SQM needs property "heterotrophic microorganism phosphorus" - Check_Options- ModuleInterface'
 
                     if (.not.FindProperty(PropertiesList, AnaerobicP_)           )   &
-                        stop 'SQM needs property "anaerobic microorganism phosphorus" - Check_Options'
+                        stop 'SQM needs property "anaerobic microorganism phosphorus" - Check_Options- ModuleInterface'
 
                     if (.not.FindProperty(PropertiesList, AutotrophicP_)         )   &
-                        STOP 'SQM needs property "autotrophic microorganism phosphorus" - Check_Options'
+                        STOP 'SQM needs property "autotrophic microorganism phosphorus" - Check_Options- ModuleInterface'
 
                     if (Sol_Bacteria) then
                         if (.not.FindProperty(PropertiesList, SolubilizingP_)    )   &
-                            STOP 'SQM needs property "solubilizing microorganism phosphorus" - Check_Options'
+                            STOP 'SQM needs property "solubilizing microorganism phosphorus" - Check_Options- ModuleInterface'
                     end if
 
                 end if cd14
 
                 if (.not.FindProperty(PropertiesList, Oxygen_))                     &
-                    stop 'SQM needs property oxygen - Check_Options'         
+                    stop 'SQM needs property oxygen - Check_Options- ModuleInterface'         
             
                 if (.not.FindProperty(PropertiesList, AutotrophicPop_))                     &
-                    stop 'SQM needs property "autotrophic microorganism population" - Check_Options'         
+                    stop 'SQM needs property "autotrophic microorganism population" - Check_Options- ModuleInterface'         
 
                 if (.not.FindProperty(PropertiesList, HeterotrophicPop_))                     &
-                    stop 'SQM needs property "heterotrophic microorganism population" - Check_Options'    
+                    stop 'SQM needs property "heterotrophic microorganism population" - Check_Options- ModuleInterface'    
 
                 if (.not.FindProperty(PropertiesList, AnaerobicPop_))                     &
-                    stop 'SQM needs property "anaerobic microorganism population" - Check_Options'    
+                    stop 'SQM needs property "anaerobic microorganism population" - Check_Options- ModuleInterface'    
                 
                 if (Sol_Bacteria) then
                     if (.not.FindProperty(PropertiesList, SolPop_))                     &
-                        stop 'SQM needs property "anaerobic microorganism population" - Check_Options'    
+                        stop 'SQM needs property "anaerobic microorganism population" - Check_Options- ModuleInterface'    
                 endif
                 
             case(CEQUALW2Model, BenthicCEQUALW2Model)
@@ -3572,7 +3581,8 @@ cd1 :   if ((ready_ .EQ. IDLE_ERR_) .OR. (ready_ .EQ. READ_LOCK_ERR_)) then
                                   DissolvedToParticulate3D, SoilDryDensity, Salinity,   &
                                   pH, IonicStrength, PhosphorusAdsortionIndex,          &
                                   Latitude, Longitude,                                  & !marta
-                                  Rate_Nitrif1,                                         &
+                                  Rate_Nitrif1,Rate_Nitrif2,                            & !marta
+                                  Rate_Denit,                                           & !marta
                                   NintFac3D, NintFac3DR, PintFac3D,                     &
                                   RootsMort, PintFac3DR,                                &
                                   SedimCellVol3D,                                       &
@@ -3601,6 +3611,8 @@ cd1 :   if ((ready_ .EQ. IDLE_ERR_) .OR. (ready_ .EQ. READ_LOCK_ERR_)) then
         real,    optional, dimension(:,:  ), pointer    :: Latitude
         real,    optional, dimension(:,:  ), pointer    :: Longitude
         real,    optional, dimension(:,:,:), pointer    :: Rate_Nitrif1
+        real,    optional, dimension(:,:,:), pointer    :: Rate_Nitrif2
+        real,    optional, dimension(:,:,:), pointer    :: Rate_Denit
         
         real,    optional, dimension(:,:,:), pointer    :: NintFac3D  !Isabella
         real,    optional, dimension(:,:,:), pointer    :: NintFac3DR  !Isabella
@@ -4059,12 +4071,13 @@ cd4 :           if (ReadyToCompute) then
                             
                             
                             
-                         case(CarbonateSystemModel)
-                            !write(*,*)'llama a CSystem desde modyinterface porque increment is off' !marta
+                         case(CarbonateSystemModel)                        
                             call UnfoldMatrix(Me%ExternalVar%DWZ, Me%Thickness)
-                            call UnfoldMatrix(Latitude, Me%Latitude1D)           
-                            call UnfoldMatrix(Longitude, Me%Longitude1D)
+                            call UnfoldMatrix(Latitude,     Me%Latitude1D)           
+                            call UnfoldMatrix(Longitude,    Me%Longitude1D)
                             call UnfoldMatrix(Rate_Nitrif1, Me%Rate_Nitrif1_1D)
+                            call UnfoldMatrix(Rate_Nitrif2, Me%Rate_Nitrif2_1D)
+                            call UnfoldMatrix(Rate_Denit,   Me%Rate_Denit_1D)
                             call GetComputeCurrentTime(Me%ObjTime,                  &
                                                        Me%ExternalVar%Now,          &
                                                        STAT = STAT_CALL)                    
@@ -4079,7 +4092,9 @@ cd4 :           if (ReadyToCompute) then
                                       Me%Array,                             & 
                                       Me%Latitude1D,                        &
                                       Me%Longitude1D,                       &
-                                      Me%Rate_Nitrif1_1D,                &
+                                      Me%Rate_Nitrif1_1D,                   &
+                                      Me%Rate_Nitrif2_1D,                   &
+                                      Me%Rate_Denit_1D,                     &
                                       STAT_CALL)                                                 
                            if (STAT_CALL /= SUCCESS_) stop 'Modify_Interface3D - ModuleInterface - ERR18b'   
                             
@@ -4985,7 +5000,9 @@ cd4 :           if (ReadyToCompute) then
                                       Me%Array,                                &
                                       Me%Latitude1D,                           &
                                       Me%Longitude1D,                          &
-                                      Me%Rate_Nitrif1_1D,                   &
+                                      Me%Rate_Nitrif1_1D,                      &
+                                      Me%Rate_Nitrif2_1D,                      &
+                                      Me%Rate_Denit_1D,                        &
                                       STAT = STAT_CALL)
                             if (STAT_CALL /= SUCCESS_) stop 'Modify_Interface1D - ModuleInterface - ERR12'    
                             
