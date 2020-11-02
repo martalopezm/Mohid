@@ -88,7 +88,6 @@ Module ModuleInterface
 
     !Selector
     public  :: GetRateFlux
-
     public  :: GetWQRatio
     
 #ifdef _PHREEQC_       
@@ -253,6 +252,7 @@ Module ModuleInterface
         real,    pointer, dimension(:    )      :: VelocityModulus1D
         real,    pointer, dimension(:    )      :: Latitude1D                => null() !MartaLopez
         real,    pointer, dimension(:    )      :: Longitude1D               => null() !MartaLopez
+        real,    pointer, dimension(:    )      :: Ratios1D                  => null() !MartaLopez
         real,    pointer, dimension(:    )      :: Rate_Nitrif1_1D           => null() !MartaLopez
         real,    pointer, dimension(:    )      :: Rate_Nitrif2_1D           => null() !MartaLopez
         real,    pointer, dimension(:    )      :: Rate_Denit_1D             => null() !MartaLopez
@@ -403,7 +403,7 @@ Module ModuleInterface
         type(T_Size3D)                                          :: Size3D
         logical,intent (IN),  optional                          :: Vertical1D
         integer,intent (OUT), optional                          :: BivalveID
-        integer,intent (OUT), optional                          :: CarbonateSystemID
+        integer,intent (OUT), optional                          :: CarbonateSystemID        
         
 #ifdef _PHREEQC_
         real, pointer, optional                                 :: SolutionMapping(:,:,:)
@@ -3035,37 +3035,48 @@ cd14 :          if (Phosphorus) then
 
     !++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
     !++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
-    !--------------------------------------------------------------------------
-    subroutine GetWQRatio(interfaceID, PropertyID, Ratio, STAT)
     
+    
+    !>@author: Modified by Marta López, Maretec
+    !>@Brief: Makes the conexion between WaterPropeties or DrainageNetwork(DN) and 
+    !> Water Quality, by sending an array (for CarbonateSystem), or a value (DN), 
+    !> that contains biogeochemical ratios (as N/C or P/C).
+    !>@param[in] interfaceID 
+    !>@param[out] PropertyID, Ratio, Ratios_for_CS, STAT
+    !--------------------------------------------------------------------------
+    subroutine GetWQRatio(interfaceID, PropertyID, Ratio, Ratios_for_CS, STAT)
         !Arguments-----------------------------------------------------------------
-        integer                                         :: InterfaceID
-        integer                                         :: PropertyID
-        real                                            :: Ratio
-        integer, optional,  intent(OUT)                 :: STAT
-        
+        integer                                            :: InterfaceID
+        integer, optional                                  :: PropertyID
+        real, optional                                     :: Ratio
+        real, dimension(:), pointer, optional, intent(OUT) :: Ratios_for_CS !marta
+        integer, optional, intent(OUT)                     :: STAT        
         !External--------------------------------------------------------------
         integer                                         :: ready_, STAT_CALL
-
         !Local-----------------------------------------------------------------
         integer                                         :: STAT_
         integer                                         :: nProperty
-
         !----------------------------------------------------------------------
         STAT_ = UNKNOWN_
         
         call Ready(InterfaceID, ready_)
         
-        if ((ready_ .EQ. IDLE_ERR_) .OR. (ready_ .EQ. READ_LOCK_ERR_)) then
-            !Number indexed to each property 
-            nProperty = PropertyIndexNumber(PropertyID  )
-
-            call GetNCRatio(Me%ObjWaterQuality,                          &
-                            nProperty,                                   &
-                            Ratio, STAT_CALL)
-            if (STAT_CALL /= SUCCESS_) stop 'GetMyRatio - ModuleInterface - ERR01'
-        
+        if ((ready_ .EQ. IDLE_ERR_) .OR. (ready_ .EQ. READ_LOCK_ERR_)) then         
+            
+            if (present(Ratios_for_CS)) then 
+               call GetNCRatio(WaterQualityID = Me%ObjWaterQuality,   &
+                               Ratios_ = Ratios_for_CS,               &
+                               STAT =  STAT_CALL)
+               if (STAT_CALL /= SUCCESS_) stop 'GetMyRatio - ModuleInterface - ERR01'
+            else   
+               !Number indexed to each property 
+               nProperty = PropertyIndexNumber(PropertyID  )
+               call GetNCRatio(WaterQualityID = Me%ObjWaterQuality,                &
+                            Property = nProperty,                                   &
+                            Ratio = Ratio, STAT = STAT_CALL)
+               if (STAT_CALL /= SUCCESS_) stop 'GetMyRatio - ModuleInterface - ERR02'  
+            end if
+        STAT_ = SUCCESS_  
         end if
         
         if (present(STAT)) STAT = STAT_
@@ -3141,7 +3152,7 @@ cd1 :   if ((ready_ .EQ. IDLE_ERR_) .OR. (ready_ .EQ. READ_LOCK_ERR_)) then
     
             if (present(FirstProp)) then
                 !Number indexed to each property. This is, returns the index number of the
-                !property in the biogeochem module (nFirstProp) where is going to be calculated,
+                !property given by the biogeochem module (nFirstProp) where is going to be calculated,
                 !based on the global ID that property has. For example, property ammonia, with
                 !global ID = 20 (FirstProp), has an WaterQuality ID = 1 (nFirstProp). @Marta
                 nFirstProp  = PropertyIndexNumber(FirstProp ) 
@@ -3580,7 +3591,7 @@ cd1 :   if ((ready_ .EQ. IDLE_ERR_) .OR. (ready_ .EQ. READ_LOCK_ERR_)) then
                                   LightExtCoefField, WaterPercentage,                   &
                                   DissolvedToParticulate3D, SoilDryDensity, Salinity,   &
                                   pH, IonicStrength, PhosphorusAdsortionIndex,          &
-                                  Latitude, Longitude,                                  & !marta
+                                  Latitude, Longitude, Ratios_forCS,                    & !marta
                                   Rate_Nitrif1,Rate_Nitrif2,                            & !marta
                                   Rate_Denit,                                           & !marta
                                   NintFac3D, NintFac3DR, PintFac3D,                     &
@@ -3608,11 +3619,12 @@ cd1 :   if ((ready_ .EQ. IDLE_ERR_) .OR. (ready_ .EQ. READ_LOCK_ERR_)) then
         real,    optional, dimension(:,:,:), pointer    :: SoilDryDensity
         real,    optional, dimension(:,:,:), pointer    :: Salinity
         real,    optional, dimension(:,:,:), pointer    :: pH
-        real,    optional, dimension(:,:  ), pointer    :: Latitude
-        real,    optional, dimension(:,:  ), pointer    :: Longitude
-        real,    optional, dimension(:,:,:), pointer    :: Rate_Nitrif1
-        real,    optional, dimension(:,:,:), pointer    :: Rate_Nitrif2
-        real,    optional, dimension(:,:,:), pointer    :: Rate_Denit
+        real,    optional, dimension(:,:  ), pointer    :: Latitude       !marta
+        real,    optional, dimension(:,:  ), pointer    :: Longitude      !marta
+        real,    optional, dimension(:    ), pointer    :: Ratios_forCS   !marta
+        real,    optional, dimension(:,:,:), pointer    :: Rate_Nitrif1   !marta
+        real,    optional, dimension(:,:,:), pointer    :: Rate_Nitrif2   !marta
+        real,    optional, dimension(:,:,:), pointer    :: Rate_Denit     !marta
         
         real,    optional, dimension(:,:,:), pointer    :: NintFac3D  !Isabella
         real,    optional, dimension(:,:,:), pointer    :: NintFac3DR  !Isabella
@@ -3658,8 +3670,6 @@ cd1 :   if ((ready_ .EQ. IDLE_ERR_) .OR. (ready_ .EQ. READ_LOCK_ERR_)) then
         integer                                         :: Index 
         integer                                         :: i, j, k
         integer                                         :: prop, JulDay
-
-
         integer                                         :: PropLB, PropUB, ArrayLB, ArrayUB 
         real                                            :: DTProp_
         logical                                         :: Increment
@@ -3711,7 +3721,6 @@ cd1 :   if (ready_ .EQ. IDLE_ERR_) then
             if(present(DWZ          ))Me%ExternalVar%DWZ              => DWZ
             if(present(ShearStress  ))Me%ExternalVar%ShearStress      => ShearStress
             if(present(SPMFlux      ))Me%ExternalVar%SPMFlux          => SPMFlux
-
             
              if(present(SeagOccupation))then
                 call UnfoldMatrix(SeagOccupation, Me%SeagOccupation)
@@ -3992,14 +4001,10 @@ cd4 :           if (ReadyToCompute) then
 
                             call WWTPQ(Me%ObjWWTPQ,                   &
                                               !Me%Salinity,                          &
-
                                               Me%Temperature,                       &
                                               !Me%ShortWaveTop,                      &
                                               !Me%LightExtCoefField,                 &
                                               !Me%Thickness,                         &
-
-
-
                                               Me%Mass,                              &
                                               Me%Array%ILB,                         &
                                               Me%Array%IUB,                         &
@@ -4023,16 +4028,11 @@ cd4 :           if (ReadyToCompute) then
                             if (STAT_CALL /= SUCCESS_) stop 'Modify_Interface3D - ModuleInterface - ERR09'
 
                       case(SeagrassWaterInteractionModel)
-                      
-                      
+                          
                       call UnfoldMatrix(ShortWaveTop,               Me%ShortWaveTop  )
                       call UnfoldMatrix(LightExtCoefField,          Me%LightExtCoefField   )
                       call UnfoldMatrix(SeagOccupation,             Me%SeagOccupation  )
                       call UnfoldMatrix(Me%ExternalVar%DWZ,         Me%Thickness)
-                     
-                      
-                            
-                            
                       call ModifySeagrassWaterInteraction(ObjSeagrassWaterInteractionID= Me%ObjSeagrassWaterInteraction,  &
                                                 OpenPoints             = Me%OpenPoints,           &
                                                 Mass                   = Me%Mass,                 &
@@ -4049,7 +4049,6 @@ cd4 :           if (ReadyToCompute) then
                         case(BivalveModel) 
                         
                             call UnfoldMatrix(CellArea, Me%CellArea1D) 
-
 
                             call GetComputeCurrentTime(Me%ObjTime,                  &
                                                        Me%ExternalVar%Now,          &
@@ -4071,18 +4070,18 @@ cd4 :           if (ReadyToCompute) then
                             
                             
                             
-                         case(CarbonateSystemModel)                        
+                        case(CarbonateSystemModel)  
                             call UnfoldMatrix(Me%ExternalVar%DWZ, Me%Thickness)
                             call UnfoldMatrix(Latitude,     Me%Latitude1D)           
                             call UnfoldMatrix(Longitude,    Me%Longitude1D)
                             call UnfoldMatrix(Rate_Nitrif1, Me%Rate_Nitrif1_1D)
                             call UnfoldMatrix(Rate_Nitrif2, Me%Rate_Nitrif2_1D)
                             call UnfoldMatrix(Rate_Denit,   Me%Rate_Denit_1D)
-                            call GetComputeCurrentTime(Me%ObjTime,                  &
-                                                       Me%ExternalVar%Now,          &
-                                                       STAT = STAT_CALL)                    
-                            if (STAT_CALL /= SUCCESS_) stop 'Modify_Interface3D - ModuleInterface - ERR18' 
-
+                            call GetComputeCurrentTime(Me%ObjTime, Me%ExternalVar%Now, STAT = STAT_CALL)                    
+                                 if (STAT_CALL /= SUCCESS_)   stop 'Modify_Interface3D - ModuleInterface - ERR18' 
+                            Me%Ratios1D  => Ratios_forCS
+                            if (.NOT. associated(Me%Ratios1D)) stop 'Modify_Interface3D - ModuleInterface - ERR18b'
+                            
                             call ModifyCarbonateSystem(Me%ObjCarbonateSystem, &
                                       Me%Salinity,                          &
                                       Me%Temperature,                       &
@@ -4092,6 +4091,7 @@ cd4 :           if (ReadyToCompute) then
                                       Me%Array,                             & 
                                       Me%Latitude1D,                        &
                                       Me%Longitude1D,                       &
+                                      Me%Ratios1D,                      &
                                       Me%Rate_Nitrif1_1D,                   &
                                       Me%Rate_Nitrif2_1D,                   &
                                       Me%Rate_Denit_1D,                     &
@@ -4560,27 +4560,7 @@ do6 :               do index = ArrayLB, ArrayUB
                     stop 'Modify_Interface2D - ModuleInterface - ERR80'
 
                 DT = InterfaceDT()
-
-               
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+                
                if(Me%SinksSourcesModel==BenthicEcologyModel)then
                  
                         NLB = Me%Array%ILB
@@ -4594,18 +4574,9 @@ do6 :               do index = ArrayLB, ArrayUB
                             end if
                         enddo 
                 
-                endif
+                endif             
              
-             
-             
-
-
-
-
                 !$OMP PARALLEL PRIVATE(Index,i,j)
-
-
-
                 !$OMP DO SCHEDULE(STATIC)
                 do Index = Me%Array%ILB, Me%Array%IUB
 
@@ -4614,8 +4585,6 @@ do6 :               do index = ArrayLB, ArrayUB
                     if (Me%ExternalVar%OpenPoints2D(i, j) == 1) then
                         Concentration(i, j) = Concentration( i, j)      + &
                                 Me%ConcentrationIncrement(nProperty, Index) * DTProp / DT 
-
-
                     end if
                 enddo
                 !$OMP END DO NOWAIT
@@ -4648,7 +4617,6 @@ do6 :               do index = ArrayLB, ArrayUB
                                   SoilDryDensity, Salinity, pH, IonicStrength,       &
                                   PhosphorusAdsortionIndex, WindVelocity,            &
                                   Oxygen1D, WaterVolume, CellArea,                   &
-!                                  SinksSourcesModel,                                    & !marta
                                   DTProp, STAT)
 
         !Arguments-------------------------------------------------------------
@@ -4675,30 +4643,20 @@ do6 :               do index = ArrayLB, ArrayUB
         real,    optional,  intent(IN)                  :: DTProp
         real,    optional, dimension(:), pointer        :: MacrOccupation, ShearStress, SPMFlux
         integer, optional,  intent(OUT)                 :: STAT
-        !character(len=StringLength), optional           :: SinksSourcesModel  !marta
-
         !External--------------------------------------------------------------
         real                                            :: DT
         integer                                         :: STAT_CALL
         integer                                         :: ready_
         logical                                         :: ReadyToCompute
-
         !Local-----------------------------------------------------------------
         integer                                         :: STAT_
         integer                                         :: nProperty
         integer                                         :: Index 
         integer                                         :: i
         integer                                         :: prop, JulDay
-
-
         integer                                         :: PropLB, PropUB, ArrayLB, ArrayUB 
         real                                            :: DTProp_
         logical                                         :: Increment
-
-
-
-
-
         !----------------------------------------------------------------------
 
         if (MonitorPerformance) call StartWatch ("ModuleInterface", "Modify_Interface1D")
@@ -4887,8 +4845,7 @@ cd4 :           if (ReadyToCompute) then
 
                             call UnfoldMatrix(ShortWaveTop,          Me%ShortWaveTop)
                             call UnfoldMatrix(LightExtCoefField,     Me%LightExtCoefField)
-                            call UnfoldMatrix(Me%ExternalVar%DWZ1D,  Me%Thickness)
-                            
+                            call UnfoldMatrix(Me%ExternalVar%DWZ1D,  Me%Thickness)                           
 
                             call CEQUALW2(Me%ObjCEQUALW2,                       &
                                           Me%Salinity,                          &
@@ -4948,12 +4905,6 @@ cd4 :           if (ReadyToCompute) then
                                                      Me%Mass,                              &
                                                      WaterVolume = WaterVolume,            &
                                                      STAT = STAT_CALL)
-
-
-
-
-
-
                                 if (STAT_CALL /= SUCCESS_) stop 'Modify_Interface1D - ModuleInterface - ERR09.5'
                             endif
 
@@ -4978,18 +4929,14 @@ cd4 :           if (ReadyToCompute) then
                                               STAT = STAT_CALL)
                             if (STAT_CALL /= SUCCESS_) stop 'Modify_Interface1D - ModuleInterface - ERR10'
                             
-                            
-                            
+                                                       
                             
                          case(CarbonateSystemModel)
-
-                            call UnfoldMatrix(Me%ExternalVar%DWZ1D, Me%Thickness) 
-                                                    
+                            call UnfoldMatrix(Me%ExternalVar%DWZ1D, Me%Thickness)                                                     
                             call GetComputeCurrentTime(Me%ObjTime,                  &
                                                        Me%ExternalVar%Now,          &
                                                        STAT = STAT_CALL)                    
-                            if (STAT_CALL /= SUCCESS_) stop 'Modify_Interface1D - ModuleInterface - ERR11' 
-
+                            if (STAT_CALL /= SUCCESS_) stop 'Modify_Interface1D - ModuleInterface - ERR11'
                            
                             call ModifyCarbonateSystem(Me%ObjCarbonateSystem,  &
                                       Me%Salinity,                             &
@@ -4998,6 +4945,7 @@ cd4 :           if (ReadyToCompute) then
                                       Me%Mass,                                 &
                                       Me%OpenPoints,                           &
                                       Me%Array,                                &
+                                      Me%Ratios1D,                         & 
                                       Me%Latitude1D,                           &
                                       Me%Longitude1D,                          &
                                       Me%Rate_Nitrif1_1D,                      &

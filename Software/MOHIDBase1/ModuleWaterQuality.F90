@@ -504,8 +504,7 @@ Module ModuleWaterQuality
         real :: POPIngestKs                                 = null_real
         real :: PON_CNratio                                 = null_real
         real :: PON_CPratio                                 = null_real
-        
-
+                
 
         !aqui_10
         integer                                     :: WQConfiguration =0
@@ -513,7 +512,7 @@ Module ModuleWaterQuality
         double precision, pointer, dimension(:,:)   :: Matrix  => null()
         real,             pointer, dimension(:  )   :: IndTerm => null()
         real, pointer, dimension(:  )               :: NewMass => null()  !Used with Explicit method
-
+        real, pointer, dimension(:)                 :: Ratios_forCS => null() !marta
         !Instance of Module_EnterData
         integer                                     :: ObjEnterData = 0
 
@@ -661,6 +660,7 @@ cd2:        if (.NOT. Me%CalcMethod%ExplicitMethod) then
         nullify(Me%Matrix                  )
         nullify(Me%IndTerm                 )
         nullify(Me%NewMass                 )
+        nullify(Me%Ratios_forCS            )
 
     end Subroutine Nullify_all_Sub_Type_Pointers    
     
@@ -4012,14 +4012,25 @@ cd22 :      if (flag .EQ. 0) then
         PropUB    = Me%Prop%IUB
 
         allocate(Me%Matrix (PropLB:PropUB, PropLB:PropUB))
-        allocate(Me%IndTerm(PropLB:PropUB               ))
-
+        allocate(Me%IndTerm(PropLB:PropUB               ))        
+      
 
 cd1 :   if (Me%CalcMethod%ExplicitMethod) then
             allocate(Me%NewMass(PropLB:PropUB), STAT = STAT_CALL)
             if (STAT_CALL .NE. SUCCESS_)                                        &
                 stop 'Subroutine AllocateVariables - ModuleWaterQuality. ERR01.'
         end if cd1
+
+cd2 :   if (Me%PropCalc%Diatoms) then 
+           allocate(Me%Ratios_forCS(1:7),STAT = STAT_CALL)
+           if (STAT_CALL .NE. SUCCESS_)                                        &
+                stop 'Subroutine AllocateVariables - ModuleWaterQuality. ERR02.'
+        else 
+           allocate(Me%Ratios_forCS(1:5),STAT = STAT_CALL)
+           if (STAT_CALL .NE. SUCCESS_)                                        &
+                stop 'Subroutine AllocateVariables - ModuleWaterQuality. ERR03.'
+       end if cd2
+    
 
         !------------------------------------------------------------------------
 
@@ -4035,30 +4046,49 @@ cd1 :   if (Me%CalcMethod%ExplicitMethod) then
     !++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
     !++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-    subroutine GetNCRatio(WaterQualityID, Property, Ratio, STAT)
+    subroutine GetNCRatio(WaterQualityID, Property, Ratio, Ratios_, STAT)
 
         !Arguments-------------------------------------------------------------
-        integer                             :: WaterQualityID
-        real                                :: Ratio
-        integer                             :: Property
-        integer, optional, intent(OUT)      :: STAT    
-
+        integer                                   :: WaterQualityID
+        real, optional                            :: Ratio
+        integer , optional                        :: Property
+        real, pointer, dimension(:), optional     :: Ratios_  !marta
+        integer, optional, intent(OUT)            :: STAT    
         !External--------------------------------------------------------------
         integer                         :: ready_
-
         !Local-----------------------------------------------------------------
         integer                         :: STAT_
-        real                                :: AlphaNTS
-
+        real                            :: AlphaNTS
         !----------------------------------------------------------------------
 
         STAT_ = UNKNOWN_
 
         call Ready(WaterQualityID, ready_)
 
-cd1 :   if ((ready_ .EQ. IDLE_ERR_     ) .OR.                                 &
+cd1 : if ((ready_ .EQ. IDLE_ERR_     ) .OR.                                 &
             (ready_ .EQ. READ_LOCK_ERR_)) then
-
+    
+   i1:  if(present(Ratios_))then
+           Me%Ratios_forCS(:) = 0.0
+                if (Me%PropCalc%Diatoms) then                    
+                    Me%Ratios_forCS(1) = Me%AlfaPhytoNC
+                    Me%Ratios_forCS(2) = Me%AlfaPhytoPC
+                    Me%Ratios_forCS(3) = Me%AlfaZooNC  
+                    Me%Ratios_forCS(4) = Me%AlfaZooPC
+                    Me%Ratios_forCS(5) = 1.
+                    Me%Ratios_forCS(6) = Me%Diatoms%DiaAlfaNC
+                    Me%Ratios_forCS(7) = Me%Diatoms%DiaAlfaNC    
+                else                 
+                    Me%Ratios_forCS(1) = Me%AlfaPhytoNC
+                    Me%Ratios_forCS(2) = Me%AlfaPhytoPC
+                    Me%Ratios_forCS(3) = Me%AlfaZooNC  
+                    Me%Ratios_forCS(4) = Me%AlfaZooPC
+                    Me%Ratios_forCS(5) = 0. !Key value to pass to carbonate system module to know if diatoms are calculated 
+                endif 
+          Ratios_ => Me%Ratios_forCS  
+          if (.not. associated(Ratios_ )) stop 'ModuleWaterQuality-GetNCRatio- ERROR 01'
+          
+        else  
             !Ratio of gN in g dry substance according to Redfiel: 16mol*14gN/mol / 2749 gTS
             AlphaNTS = 16.*14./2749.
             Ratio = 1.0/AlphaNTS  !for all non-living VSS as PON and PONr
@@ -4067,11 +4097,12 @@ cd1 :   if ((ready_ .EQ. IDLE_ERR_     ) .OR.                                 &
             if (Property == Me%PropIndex%Zoo                    ) Ratio = Me%AlfaZooNC     /AlphaNTS
             if (Property == Me%PropIndex%Ciliate                ) Ratio = Me%AlfaCilNC     /AlphaNTS
             if (Property == Me%PropIndex%Bacteria               ) Ratio = Me%AlfaBacteriaNC/AlphaNTS
-
+        endif i1      
+        
             STAT_ = SUCCESS_
-        else 
+      else 
             STAT_ = ready_
-        end if cd1
+      end if cd1
         
         if (present(STAT))                                                    &
             STAT = STAT_
@@ -9008,8 +9039,8 @@ cd1 :   if (ready_ .NE. OFF_ERR_) then
                 deallocate(Me%Matrix, STAT = STAT_CALL)
                 if (STAT_CALL .NE. SUCCESS_)                                    &
                     stop 'Subroutine Kill_WaterQuality - ModuleWaterQuality. ERR03.'
-                nullify(Me%Matrix)
-
+                nullify(Me%Matrix)  
+                
 
 cd4 :           if (associated(Me%NewMass)) then
                     deallocate(Me%NewMass, STAT = STAT_CALL)
@@ -9017,6 +9048,12 @@ cd4 :           if (associated(Me%NewMass)) then
                         stop 'Subroutine Kill_WaterQuality - ModuleWaterQuality. ERR04.'
                     nullify(Me%NewMass)
                 end if cd4
+
+
+                deallocate(Me%Ratios_forCS, STAT = STAT_CALL)
+                if (STAT_CALL .NE. SUCCESS_)                                    &
+                    stop 'Subroutine Kill_WaterQuality - ModuleWaterQuality. ERR05.'
+                nullify(Me%Ratios_forCS)
 
 
                 call DeallocateInstance

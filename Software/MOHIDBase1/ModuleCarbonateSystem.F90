@@ -160,6 +160,7 @@
       use ModuleEnterData      
       use ModuleTime
 
+
       implicit none            
       private      
             
@@ -189,6 +190,7 @@
       private :: CS_computations
       private :: ComputeAlkalinity_param
       private :: ComputeAlkalinity_bio
+      private :: Biogeochemical_ratios
       !private :: ComputeDIC_calc
       !private :: ComputeDIC_no_calc
       !private :: Computemocsy
@@ -257,21 +259,33 @@
     end type T_ID  
 
 
-   private ::  T_ExternalVar                
-    type       T_ExternalVar              !Output variables from other modules needed as input information for this one 
-        real, pointer, dimension(:  )       :: Salinity      !Salinity        1D array. Origin: WaterPropertiesModule
-        real, pointer, dimension(:  )       :: Temperature   !Temperature     1D array. Origin: WaterPropertiesModule
-        real, pointer, dimension(:  )       :: Thickness     !Cell? thickness 1D array. Origin: GeometryModule,original name DWZ
-        real, pointer, dimension(:,:)       :: Mass          !Property mass   2D array. Origin: WaterPropertiesModule
-        real, pointer, dimension(:  )       :: Latitude      !Latitude        1D array. Origin: HorizontalGridModule
-        real, pointer, dimension(:  )       :: Longitude     !Longitude       1D array. Origin: HorizontalGridModule   
-        real, pointer, dimension(:  )       :: Nitrification1!Nitrif1         1D array. Origin: WaterQualityModule 
-        real, pointer, dimension(:  )       :: Nitrification2!Nitrif2         1D array. Origin: WaterQualityModule
-        real, pointer, dimension(:  )       :: Denitrification!Denit          1D array. Origin: WaterQualityModule
-        integer, pointer, dimension(:  )    :: OpenPoints    !Grid points with water where perform calculations. Origin: MapModule              
-      end type T_ExternalVar             !Latitude and latitude are geographic coordenates in decimal format
+   private ::  T_ExternalVar                !Output variables from other modules needed as input information for this one            
+    type       T_ExternalVar               
+        real, pointer, dimension(:  )       :: Salinity       !Salinity        1D array. Origin: WaterPropertiesModule
+        real, pointer, dimension(:  )       :: Temperature    !Temperature     1D array. Origin: WaterPropertiesModule
+        real, pointer, dimension(:  )       :: Thickness      !Cell?thickness  1D array. Origin: GeometryModule,original name DWZ
+        real, pointer, dimension(:,:)       :: Mass           !Property mass   2D array. Origin: WaterPropertiesModule
+        real, pointer, dimension(:  )       :: Latitude       !Latitude        1D array. Origin: HorizontalGridModule
+        real, pointer, dimension(:  )       :: Longitude      !Longitude       1D array. Origin: HorizontalGridModule 
+        real, pointer, dimension(:  )       :: Ratios         !Biogeoch ratios 1D array. Origin: WaterQualityModule  
+        real, pointer, dimension(:  )       :: Nitrification1 !Nitrif1         1D array. Origin: WaterQualityModule 
+        real, pointer, dimension(:  )       :: Nitrification2 !Nitrif2         1D array. Origin: WaterQualityModule
+        real, pointer, dimension(:  )       :: Denitrification!Denit           1D array. Origin: WaterQualityModule
+        integer, pointer, dimension(:  )    :: OpenPoints     !Grid points with water where perform calculations. Origin: MapModule              
+    end type T_ExternalVar               !Latitude and latitude are geographic coordenates in decimal format
                                          !Latitude, Longitude, Thickness and OpenPoints are gotten by WaterPropertiesModule
 
+    private ::  T_ExternalRatio                          
+    type       T_ExternalRatio              
+        real            :: NC_phyto             = null_real    
+        real            :: PC_phyto             = null_real
+        real            :: NC_zoo               = null_real   
+        real            :: PC_zoo               = null_real
+        real            :: NC_diatm             = null_real   
+        real            :: PC_diatm             = null_real
+        integer         :: Diatm_are_calculated = null_int        
+    end type T_ExternalRatio   
+        
 
      private :: T_CarbonateSystem
      type       T_CarbonateSystem
@@ -284,12 +298,12 @@
         type(T_BioChemParam      )                      :: BioChemParam
         type(T_ComputeOptions    )                      :: ComputeOptions
         type(T_ExternalVar       )                      :: ExternalVar
+        type(T_ExternalRatio     )                      :: ExternalRatio
         type(T_Size1D            )                      :: Array
         type(T_Size1D            )                      :: Prop
         type(T_PropIndex         )                      :: PropIndex
-        type(T_CarbonateSystem   ), pointer             :: Next              
-        integer                                         :: ObjWaterQuality      = 0
-        integer                                         :: ObjLife              = 0
+        type(T_CarbonateSystem   ), pointer             :: Next      
+
       end type T_CarbonateSystem
                                                       
  ! ------ Global Module Variables ----------------------   
@@ -587,6 +601,7 @@ cd0 : if (ready_ .EQ. OFF_ERR_) then
         !if (STAT_CALL .NE. SUCCESS_) stop 'ConstructGlobalVariables - ModuleCarbonateSystem - ERROR #1'
         !For compatibility with the rest of the program,  DT [sec] converted to DT [day]
         !Me%DT_day      = Me%DT / (3600.*24.)
+        
   !---------------------------------------------------------------------------  
    end subroutine ConstructGlobalVariables
   !::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
@@ -871,10 +886,8 @@ if1 :   if ((ready_ .EQ. IDLE_ERR_     ) .OR.                                 &
     !--------------------------------------------------------------------------
     end subroutine GetCarbonateSystemPropIndex
     !:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-
       
-
-    
+     
     
     
     !++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -903,6 +916,7 @@ if1 :   if ((ready_ .EQ. IDLE_ERR_     ) .OR.                                 &
                                      ArraySize,                                  &
                                      Latitude,                                   &
                                      Longitude,                                  &
+                                     Ratios,                                     &
                                      Rate_Nitrif1,                               &
                                      Rate_Nitrif2,                               &
                                      Rate_Denit,                                 &
@@ -916,6 +930,7 @@ if1 :   if ((ready_ .EQ. IDLE_ERR_     ) .OR.                                 &
       integer, optional,  pointer, intent(IN), dimension(:  )   :: OpenPoints
       real,               pointer, intent(IN), dimension(:  )   :: Latitude
       real,               pointer, intent(IN), dimension(:  )   :: Longitude
+      real,               pointer, intent(IN), dimension(:  )   :: Ratios
       real,               pointer, intent(IN), dimension(:  )   :: Rate_Nitrif1
       real,               pointer, intent(IN), dimension(:  )   :: Rate_Nitrif2
       real,               pointer, intent(IN), dimension(:  )   :: Rate_Denit
@@ -953,20 +968,26 @@ if1 :   if ((ready_ .EQ. IDLE_ERR_     ) .OR.                                 &
             Me%ExternalVar%Longitude                  => Longitude
             if (.NOT. associated(Me%ExternalVar%Longitude))           &
                stop 'Subroutine ModifyCarbonateSystem - ModuleCarbonateSystem. ERR07'
+            Me%ExternalVar%Ratios                     => Ratios
+            if (.NOT. associated(Me%ExternalVar%Longitude))           &
+               stop 'Subroutine ModifyCarbonateSystem - ModuleCarbonateSystem. ERR08'
             Me%ExternalVar%Nitrification1              => Rate_Nitrif1
             if (.NOT. associated(Me%ExternalVar%Nitrification1))           &
-              stop 'Subroutine ModifyCarbonateSystem - ModuleCarbonateSystem. ERR08'
+               stop 'Subroutine ModifyCarbonateSystem - ModuleCarbonateSystem. ERR09'
             Me%ExternalVar%Nitrification2              => Rate_Nitrif2
             if (.NOT. associated(Me%ExternalVar%Nitrification2))           &
-              stop 'Subroutine ModifyCarbonateSystem - ModuleCarbonateSystem. ERR09'
+               stop 'Subroutine ModifyCarbonateSystem - ModuleCarbonateSystem. ERR10'
             Me%ExternalVar%Denitrification              => Rate_Denit
             if (.NOT. associated(Me%ExternalVar%Denitrification))          &
-              stop 'Subroutine ModifyCarbonateSystem - ModuleCarbonateSystem. ERR10'
+               stop 'Subroutine ModifyCarbonateSystem - ModuleCarbonateSystem. ERR11'
            
             !Associates array dimension (external) to array dimension variable of this module(Me%Array%) 
             Me%Array%ILB = ArraySize%ILB
             Me%Array%IUB = ArraySize%IUB
-
+            
+            !Store in individual variables ratios contained in Ratios array
+            call Biogeochemical_ratios 
+            
             !Checks along dimensions of open point 1Darray (grid array converted to 1D) the points with water
 d1:         do index = Me%Array%ILB, Me%Array%IUB            
  i1:            if (present(OpenPoints)) then
@@ -978,7 +999,7 @@ d1:         do index = Me%Array%ILB, Me%Array%IUB
                 else
                     CalcPoint = .true.
                 endif i1               
-             !If the array element contains water (CalcPoint = true), do computations in it 
+            !If the array element contains water (CalcPoint = true), do computations in it 
  i3:           if (CalcPoint) then 
                 call CS_computations(index)  
                endif i3
@@ -990,6 +1011,7 @@ d1:         do index = Me%Array%ILB, Me%Array%IUB
             nullify(Me%ExternalVar%Mass       )  
             nullify(Me%ExternalVar%Latitude   )  
             nullify(Me%ExternalVar%Longitude  ) 
+            nullify(Me%ExternalVar%Ratios     ) 
             nullify(Me%ExternalVar%Nitrification1)
             nullify(Me%ExternalVar%Nitrification2)
             nullify(Me%ExternalVar%Denitrification)
@@ -1001,14 +1023,34 @@ d1:         do index = Me%Array%ILB, Me%Array%IUB
 
         if (present(STAT)) STAT = STAT_           
  !----------------------------------------------------------------------------
-   end subroutine ModifyCarbonateSystem
+  end subroutine ModifyCarbonateSystem
  !:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::: 
 
                                      
                                      
+ !>@author Marta López, Maretec
+ !>@Brief: Stores in individual variables the ratios contained in 
+ !> Me%ExternalVar%Ratios 1D array  
+ !:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::      
+ subroutine Biogeochemical_ratios
+ !-------------------------------------------------------------------------
+
+   Me%ExternalRatio%NC_phyto             = Me%ExternalVar%Ratios(1)  
+   Me%ExternalRatio%PC_phyto             = Me%ExternalVar%Ratios(2)  
+   Me%ExternalRatio%NC_zoo               = Me%ExternalVar%Ratios(3)  
+   Me%ExternalRatio%PC_zoo               = Me%ExternalVar%Ratios(4)    
+   Me%ExternalRatio%NC_diatm             = Me%ExternalVar%Ratios(6)  
+   Me%ExternalRatio%PC_diatm             = Me%ExternalVar%Ratios(7)
+   Me%ExternalRatio%Diatm_are_calculated = Me%ExternalVar%Ratios(5) 
+ 
+ !----------------------------------------------------------------------------
+ end subroutine Biogeochemical_ratios
+ !::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+   
+ 
+                                     
  !>@author Marta López Maretec
- !>@Brief:
- !> Calls the subroutines that do computations
+ !>@Brief: Calls the subroutines that do computations
  !>@param[in] index
  !:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::: 
                                      
@@ -1027,15 +1069,12 @@ d1:         do index = Me%Array%ILB, Me%Array%IUB
                         
   ! DIC calculation, depending on the chosen option of .datfile        
    i2: if (Me%ComputeOptions%DIC_calcification) then                        
-  !      call ComputeDIC_calc    (index) 
-         !write(*,*)'hi, DIC calc ON ,modifier' !marta                      
+  !      call ComputeDIC_calc    (index)                    
        elseif (Me%ComputeOptions%DIC_no_calcification) then                        
-  !      call ComputeDIC_no_calc (index)   
-         !write(*,*)'hi, DIC no_calc ON .modifier' !marta  
+  !      call ComputeDIC_no_calc (index)    
        endif i2
   
-  ! Rest of carbonate system parameters calculation     
-       
+  ! Rest of carbonate system parameters calculation 
   ! i3: if () then             
   !      call mocsy (index)       
   !     endif i3
@@ -1061,13 +1100,13 @@ d1:         do index = Me%Array%ILB, Me%Array%IUB
      real                         :: Lat                !Latitude local
      real                         :: Long               !Longitude local
      real                         :: Temp               !Temperature  local       
-     character(len=StringLength)  :: Ocean_Case             = null_str 
+     character(len=StringLength)  :: Ocean_Case         = null_str 
      !     'North_Atlantic'         30ºN-80ºN, 0ºC<SST<20ºC; 31<SSS<37 
      !     'North_Pacific'              >30ºN,     SST<20ºC; 31<SSS<35 
      !     'Subtropics'             30ºS-30ºN,     SST>20ºC; 31<SSS<38 
      !     'Southern_Ocean'         70ºS-30ºS,     SST<20ºC; 33<SSS<36
-     !     'Eq_upwelling_Pacific'   20ºS-20ºN,75ºW-110ºW;10ºS-10ºN,110ºW-140ºW,...             
-     !     'Out_of_range_S'                          ... SST>18ºC; 31<SSS<36.5
+     !     'Eq_upwelling_Pacific'   20ºS-20ºN,75ºW-110ºW;10ºS-10ºN,110ºW-140ºW, ...             
+     !     'Out_of_range_S'                        ... SST>18ºC; 31<SSS<36.5
      !     'Out_of_range_N'     
     !----------------------------------------------------------------------     
      Lat  = Me%ExternalVar%Latitude(index) 
@@ -1188,24 +1227,27 @@ i3:     if (temp > 20.) then
            
      END SELECT
      
-     Me%ExternalVar%Mass(Me%PropIndex%ALK_cs_p , Index) = ALK !marta Pedir a alguien que revise si esto está bien
+     ! Entender como es enviada a waterproperties, que no divida por el volumen! porque 
+     ! aqui ya esta en umol/kg. Hay que multil por densidad??
+     Me%ExternalVar%Mass(Me%PropIndex%ALK_cs_p , Index) = ALK 
      !write(*,*) 'Alcalinidad (umol/kg) = ', ALK 
      !write(*,*)'latitud=', Lat
      !write(*,*)'longitud=', Long
      !write(*,*)'temperatura=', temp
     !write(*,*)'thickness = ', Me%ExternalVar%Thickness(index) 
     !write(*,*)'Openpoints =', Me%ExternalVar%OpenPoints(index)
-    !write(*,*) 'Ha entrado en computealkalinity_param, index = ', index !marta
-   ! write(*,*) 'Index = ', index !marta
 !----------------------------------------------------------------------------
   end subroutine ComputeAlkalinity_param
 !::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 
 
+  
  !>@author Marta López, Maretec
  !>@Brief:
  !> Calculates alkalinity values taking into account the changes due to 
  !> biological activity
+ !> Units here: ueq (micro equivalents). Once it is sent to WaterProperties, units 
+ !> are ueq/L.  
  !>@param[in] index, 
 !:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
   
@@ -1213,99 +1255,122 @@ i3:     if (temp > 20.) then
  
    !Arguments-----------------------------------------------------------------
      integer, intent(IN) :: index   
-    !Local--------------------------------------------------------------------    
-     real                :: Red_NC        !Nitrogen to Carbon Redfield ratio 
-     !real                :: yN           !Mean N/C stoichometry ratio used by phyto and diatoms
-     !real                :: yp           !Mean N/P stoichometry ratio used by phyto and diatoms
-     real                :: Nitrif1       !Nitrif1 
-     real                :: Nitrif2       !Nitrif2 
-     real                :: Denit         !Denitrification
-    !-------------------------------------------------------------------------    
-     Red_NC  = Me%BioChemParam%Redfield_NC    !     
-     !yN_p                    !Phytoplankton N/C Refield stoichometry used in WQmodule
-     !yN_p_life               !Phytoplankton N/C Refield stoichometry used in Life
-     !yP_p                    !Phytoplankton P/C Refield stoichometry used in WQmodule
-
-   !---------------------------------------------------------------------------                                                                                       
      
-     !Rates are mass rates in mg/seconds (mg/WQDT_seconds). Conversion to moles (i.e. amount of moles prod/retired within the time step, in seconds).
-     !Cuanto se ha creado/destruido en cada instante temporal (contabilizado en segundos) 
-     
-     ![mmolesN]                       [mgN/dtsec]    /     [mgN/mmolN]                        
-      Nitrif1 = Me%ExternalVar%Nitrification1 (index) / Me%AuxParam%N_AtomicMass      
-      Nitrif2 = Me%ExternalVar%Nitrification2 (index) / Me%AuxParam%N_AtomicMass
-      Denit   = Me%ExternalVar%Denitrification(index) / Me%AuxParam%N_AtomicMass
+   !Local--------------------------------------------------------------------   
+     real           :: Nitrif1       !Nitrif1 
+     real           :: Nitrif2       !Nitrif2 
+     real           :: Denit         !Denitrification
+     real           :: yN_pd         !Mean N/C stoichometry ratio used by phyto and diatoms
+     real           :: yP_pd         !Mean N/C stoichometry ratio used by phyto and diatoms
+     real           :: yN_p          !Phytoplankton N/C stoichometry ratio used in pelagic module
+     real           :: yP_p          !Phytoplankton P/C stoichometry ratio used in pelagic module
+     real           :: yN_d          !Diatoms N/C stoichometry ratio used in pelagic module
+     real           :: yP_d          !Diatoms P/C stoichometry ratio used in pelagic module
+     real           :: yN_z          !Zooplankton N/C stoichometry ratio used in pelagic module
+     real           :: yP_z          !Zooplankton P/C stoichometry ratio used in pelagic module
+   !----------------------------------------------------------------------------------------------    
+        yN_p = Me%ExternalRatio%NC_phyto    
+        yP_p = Me%ExternalRatio%PC_phyto
+        yN_d = Me%ExternalRatio%NC_diatm
+        yP_d = Me%ExternalRatio%PC_diatm
+        yN_z = Me%ExternalRatio%NC_zoo
+        yP_z = Me%ExternalRatio%PC_zoo     
+    !------------------------------------------------------------------------------------------------    
+    !Rates are mass rates in mg/seconds (mg/WQDT_seconds). Conversion to moles (i.e. amount of moles 
+    !prod/retired within the time step, in seconds).Cuanto se ha creado/destruido en cada instante temporal (contabilizado en segundos) 
+    
+     ![mmolesN]                    [mgN/dtsec]       /     [mgN/mmolN]                        
+     Nitrif1 = Me%ExternalVar%Nitrification1 (index) / Me%AuxParam%N_AtomicMass      
+     Nitrif2 = Me%ExternalVar%Nitrification2 (index) / Me%AuxParam%N_AtomicMass
+     Denit   = Me%ExternalVar%Denitrification(index) / Me%AuxParam%N_AtomicMass
       
-      ![umolesN] = [mmolesN] * 10^3 
-      Nitrif1    = -Nitrif1 / 0.001  !With a minus, to convert the values of ammonia retired (in negative) to positive
-      Nitrif2    = Nitrif2 / 0.001 
-      Denit      = Denit   / 0.001 
-
-
+     ![umolesN] = [mmolesN] * 10^3 
+     Denit      = -Denit   / 0.001  !With a minus, to convert the values of nitrate retired (in negative) to positive
+     Nitrif1    = -Nitrif1 / 0.001  !With a minus, to convert the values of ammonia retired (in negative) to positive
+     Nitrif2    =  Nitrif2 / 0.001   
      
- i1:  IF (Me%ComputeOptions%DIC_calcification) THEN                       !Calculate changes in alk including calcite prec/dis  
      
-  i2:     if (Me%ComputeOptions%PelagicModel .eq. WaterQualityModel) then       
-    !i3:     if (Me%ExternalVar%Diatoms_are_activated == 0)     
-             Me%ExternalVar%Mass(Me%PropIndex%ALK_cs_b, Index) = Me%ExternalVar%Mass(Me%PropIndex%ALK_cs_b, Index) &    
-             !                                            + ((0.8 + yN + yP) * Red_NC * DenitRate        &    ! <- sources
-             !                                            + (yN + yP) * Red_NC * PPbasedonnitrate        & 
-             !                                            + (yN - yP) * Red_NC * AerobicMineral          &
-             !                                            + 2. * CaCo3Disolution                         &
-                                                          - Red_NC * Nitrif1                            &  ! <- sinks
-                                                          - Red_NC * Nitrif2
-             !                                            - (2.* Red_NC * (- Nitrif1 - Nitrif2 )) MAAAL  !&                                       
-             !                                            - 2. * CaCo3Precipitation    
-            ! Y aquí??? deberíamultiplicar por la densidad??? - (2.* Red_NC * (- Nitrif1 - Nitrif2 )) MAAAL  !&   
+ i1:  IF (Me%ComputeOptions%DIC_calcification) THEN                        !Calculate changes in alk including calcite prec/dis  
+     
+  i2:    if (Me%ComputeOptions%PelagicModel .eq. WaterQualityModel) then   ! Water Quality as pelagic model
+      
+    i3:     if (Me%ExternalRatio%Diatm_are_calculated == 0) then           !Not activated
+    
+              Me%ExternalVar%Mass(Me%PropIndex%ALK_cs_b, Index) = Me%ExternalVar%Mass(Me%PropIndex%ALK_cs_b, Index) &    
+                                                              + (0.8 + yN_p + yP_p) * Denit                         & ! <- sources 
+                                                              !+ (yN_p + yP_p) *  PPbasedonnitrate                  & 
+                                                              !+ (yN - yP) * AerobicMineral                         &
+                                                              !+ 2. * CaCo3Disolution                               &
+                                                              - Nitrif1                                             &  ! <- sinks
+                                                              - Nitrif2                                  
+                                                              !-(yP_p - yN_p) PPbasedonammonia
+                                                              !- 2. * CaCo3Precipitation         
              
-            !elseif(Me%ExternalVar%Diatoms_are_activated == 1)  
-            !yN_d = Me%External...   !Diatoms N/C Refield stoichometry used in WQmodule
-            !yP_d = Me%External...   !Diatoms P/C Refield stoichometry used in WQmodule
-            !yN = (yN_p + yN_d) / 2.
-            !yP = (yP_p + yP_d) / 2.
+            elseif(Me%ExternalRatio%Diatm_are_calculated == 1) then                
+                    yN_pd = (yN_p + yN_d) / 2. 
+                    yP_pd = (yP_p + yP_d) / 2.
       
-             !Me%ExternalVar%Mass(Me%PropIndex%ALK_cs_b, Index) = Me%ExternalVar%Mass(Me%PropIndex%ALK_cs_b, Index) &    
-             !                                            + ((0.8 + yN + yP) * Red_NC * DenitRate             &    ! <- sources
-             !                                            + (yN_p + yP_p) * Red_NC * PPbasedonnitrate_phyt    & 
-             !                                            + (yN_d + yP_d) * Red_NC * PPbasedonnitrate_diat    &
-             !                                            + (yN_p - yP_p) * Red_NC * AerobicMineral           &
-             !                                            + (yN_d - yP_d) * Red_NC * AerobicMineral_diat      &
-             !                                            + 2. * CaCo3Disolution                              &
-             !                                             - Red_NC * -Nitrif1                                 &  ! <- sinks
-             !                                             - Red_NC * Nitrif2                                          
-             !                                            - 2. * CaCo3Precipitation
-             !                                            - (yP_p - yN_p) * Red_NC * PPbasedonammonia_phyto) 
-             !                                            - (yP_d - yN_d) * Red_NC * PPbasedonammonia_diat) 
-             !endif i3                
+              Me%ExternalVar%Mass(Me%PropIndex%ALK_cs_b, Index) = Me%ExternalVar%Mass(Me%PropIndex%ALK_cs_b, Index) &    
+                                                              + (0.8 + yN_pd + yP_pd) * Denit                       &  ! <- sources
+                                                             ! + (yN_p + yP_p) * PPbasedonnitrate_phyt              & 
+                                                             ! + (yN_d + yP_d) * PPbasedonnitrate_diat              &
+                                                             !+ (yN_p - yP_p)  * AerobicMineral                     &
+                                                             !+ (yN_d - yP_d)  * AerobicMineral_diat                &
+                                                             !+ 2. * CaCo3Disolution                                &
+                                                              - Nitrif1                                             &  ! <- sinks
+                                                              - Nitrif2                                          
+                                                             !- 2. * CaCo3Precipitation
+                                                             !- (yP_p - yN_p) * PPbasedonammonia_phyto) 
+                                                             !- (yP_d - yN_d) * PPbasedonammonia_diat) 
+            endif i3               
              
-          elseif (Me%ComputeOptions%PelagicModel .eq. LifeModel) then
-                !yP_p_life               !Phytoplankton P/C Refield stoichometry used in Life
-                !yN_d_life               !Diatoms N/C Refield stoichometry used in Life     
-                !yP_d_life               !Diatoms P/C Refield stoichometry used in Life                 
-          endif i2          
+         elseif (Me%ComputeOptions%PelagicModel .eq. LifeModel) then
+           !Facer um get como o getNCratio do WaterQuality,para crear um array com os mesmos valores e dimension. 
+           !Acrescentar ese get na subroutina GetWQRatio do interface, o facer outra, mas chamar ela
+           !no mesmo luar onde é chamada no WaterProperties. Precisa tambem pegar nas taxas biogeoquimicas. 
+           !Fazer uma subroutina igual a WaterQuality_Processes_Rates localizada no WaterProperties.  
+         endif i2          
 
-      ELSEIF (Me%ComputeOptions%DIC_no_calcification) THEN                 !Not include changes due to calcite prec/dis  
+      ELSEIF (Me%ComputeOptions%DIC_no_calcification) THEN                     !Not include changes due to calcite prec/dis 
      
-  i4:     if (Me%ComputeOptions%PelagicModel .eq. WaterQualityModel) then
+   i4:   if (Me%ComputeOptions%PelagicModel .eq. WaterQualityModel) then 
       
-             Me%ExternalVar%Mass(Me%PropIndex%ALK_cs_b, Index) = Me%ExternalVar%Mass(Me%PropIndex%ALK_cs_b, Index)  !  &    
-             !                                                  + ((0.8 + yN + yP) * Red_NC * DenitRate        &    ! <- sources
-             !                                                  + (yN + yP) * Red_NC * PPbasedonnitrate        & 
-             !                                                  + (yN - yP) * Red_NC * AerobicMineral          &
-             !                                                  - (2.* Red_NC * NitrifRate                     &    ! <- sinks                                 
-             !                                                  + (yP - yN) * Red_NC * PPbasedonammonia)! * Me%DT_day  no pillo porqué
+    i5:     if (Me%ExternalRatio%Diatm_are_calculated == 0) then               !Not activated
+    
+              Me%ExternalVar%Mass(Me%PropIndex%ALK_cs_b, Index) = Me%ExternalVar%Mass(Me%PropIndex%ALK_cs_b, Index) &    
+                                                              + (0.8 + yN_p + yP_p) * Denit                         & ! <- sources 
+                                                              !+ (yN_p + yP_p) *  PPbasedonnitrate                  & 
+                                                              !+ (yN - yP) * AerobicMineral                         & 
+                                                              - Nitrif1                                             &  ! <- sinks
+                                                              - Nitrif2                                  
+                                                              !-(yP_p - yN_p) PPbasedonammonia
+             
+            elseif(Me%ExternalRatio%Diatm_are_calculated == 1) then               
+               yN_pd = (yN_p + yN_d) / 2. 
+               yP_pd = (yP_p + yP_d) / 2.
       
-          elseif (Me%ComputeOptions%PelagicModel .eq. LifeModel) then
-          endif i4          
-
+              Me%ExternalVar%Mass(Me%PropIndex%ALK_cs_b, Index) = Me%ExternalVar%Mass(Me%PropIndex%ALK_cs_b, Index) &    
+                                                              + (0.8 + yN_pd + yP_pd) * Denit                       &  ! <- sources
+                                                             ! + (yN_p + yP_p) * PPbasedonnitrate_phyt              & 
+                                                             ! + (yN_d + yP_d) * PPbasedonnitrate_diat              &
+                                                             !+ (yN_p - yP_p)  * AerobicMineral                     &
+                                                             !+ (yN_d - yP_d)  * AerobicMineral_diat                &
+                                                              - Nitrif1                                             &  ! <- sinks
+                                                              - Nitrif2                                          
+                                                             !- (yP_p - yN_p) * PPbasedonammonia_phyto) 
+                                                             !- (yP_d - yN_d) * PPbasedonammonia_diat) 
+            endif i5                             
+         elseif (Me%ComputeOptions%PelagicModel .eq. LifeModel) then 
+         endif i4        
       ENDIF i1
       
 !----------------------------------------------------------------------------     
  end subroutine ComputeAlkalinity_bio
 !::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 
-
-
+ 
+ 
+ 
 
 
 
