@@ -4077,7 +4077,7 @@ cd1 : if ((ready_ .EQ. IDLE_ERR_     ) .OR.                                 &
                     Me%Ratios_forCS(4) = Me%AlfaZooPC
                     Me%Ratios_forCS(5) = 1.
                     Me%Ratios_forCS(6) = Me%Diatoms%DiaAlfaNC
-                    Me%Ratios_forCS(7) = Me%Diatoms%DiaAlfaNC    
+                    Me%Ratios_forCS(7) = Me%Diatoms%DiaAlfaPC    
                 else                 
                     Me%Ratios_forCS(1) = Me%AlfaPhytoNC
                     Me%Ratios_forCS(2) = Me%AlfaPhytoPC
@@ -7200,7 +7200,7 @@ cd3 :           if (Age_ .le. Inter_age) then
     !PhytoNutrientsLimitationFactor, the nutrients limitation factor is the minimum between 
     !Nitrogen and Phosphorus
 cd2 :   if (Me%PropCalc%Nitrogen) then
-            Me%PhytoNLimitationFactor   = (Me%ExternalVar%Mass(AM, index)                      &
+            Me%PhytoNLimitationFactor   = (Me%ExternalVar%Mass(AM, index)                             &
                                                 + Me%ExternalVar%Mass(NA, index))                     &
                                                 / (Me%NSatConst                                       &
                                                 + Me%ExternalVar%Mass(AM, index)                      &
@@ -7214,7 +7214,7 @@ cd2 :   if (Me%PropCalc%Nitrogen) then
 
     !Phosphorus limitation factor
 cd3 :  if (Me%PropCalc%Phosphorus.AND.(.NOT.Me%PropCalc%Bacteria)) then
-            Me%PhytoPLimitationFactor =  Me%ExternalVar%Mass(IP, index)                      &
+            Me%PhytoPLimitationFactor =  Me%ExternalVar%Mass(IP, index)                               &
                                                / (Me%PSatConst                                        &
                                                + Me%ExternalVar%Mass(IP, index))
         else
@@ -7226,7 +7226,8 @@ cd3 :  if (Me%PropCalc%Phosphorus.AND.(.NOT.Me%PropCalc%Bacteria)) then
                               min(Me%PhytoNLimitationFactor, Me%PhytoPLimitationFactor)
 
 
-    !TPhytoLimitationFactor, temperature effect on Phytoplankton assimilation rate
+    !TPhytoLimitationFactor, temperature effect on Phytoplankton assimilation rate. 
+    !Following Thornton and Lessen (1978)
         s1 = (1.0 / (Me%TOptPhytoMin - Me%TPhytoMin)) * log((Me%FK2 * (1.0 - Me%FK1))              &
                                                           / (Me%FK1 * (1.0 - Me%FK2)))
 

@@ -8049,7 +8049,8 @@ cd1 :   if ( SurfaceRadiation_                              == Property .or.    
 
     !----------------------------------------------------------------------------
     !function WQPhytoLightLimitationFactor computes the Phytoplankton light limitation factor
-    !of each water mass.
+    !of each water mass. The light limitation factor defines the relationship between 
+    !the ambient light levels and primary producers' photosynthetic rate
     !
 
     function PhytoLightLimitationFactor(Thickness,                        &

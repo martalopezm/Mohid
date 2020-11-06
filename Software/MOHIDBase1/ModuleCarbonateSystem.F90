@@ -930,10 +930,10 @@ if1 :   if ((ready_ .EQ. IDLE_ERR_     ) .OR.                                 &
       integer, optional,  pointer, intent(IN), dimension(:  )   :: OpenPoints
       real,               pointer, intent(IN), dimension(:  )   :: Latitude
       real,               pointer, intent(IN), dimension(:  )   :: Longitude
-      real,               pointer, intent(IN), dimension(:  )   :: Ratios
-      real,               pointer, intent(IN), dimension(:  )   :: Rate_Nitrif1
-      real,               pointer, intent(IN), dimension(:  )   :: Rate_Nitrif2
-      real,               pointer, intent(IN), dimension(:  )   :: Rate_Denit
+      real,   optional,   pointer, intent(IN), dimension(:  )   :: Ratios
+      real,   optional,   pointer, intent(IN), dimension(:  )   :: Rate_Nitrif1
+      real,   optional,   pointer, intent(IN), dimension(:  )   :: Rate_Nitrif2
+      real,   optional,   pointer, intent(IN), dimension(:  )   :: Rate_Denit
       type(T_Size1D)             , intent(IN)                   :: ArraySize
       integer, optional,           intent(OUT)                  :: STAT           
     !Local------------------------------------------------------------------------------      
@@ -968,25 +968,31 @@ if1 :   if ((ready_ .EQ. IDLE_ERR_     ) .OR.                                 &
             Me%ExternalVar%Longitude                  => Longitude
             if (.NOT. associated(Me%ExternalVar%Longitude))           &
                stop 'Subroutine ModifyCarbonateSystem - ModuleCarbonateSystem. ERR07'
+            
+            if(present(Ratios) .and. present(Rate_Nitrif1) .and. present(Rate_Nitrif2)  & 
+               .and. present(Rate_Denit)) then                 
             Me%ExternalVar%Ratios                     => Ratios
-            if (.NOT. associated(Me%ExternalVar%Longitude))           &
+                if (.NOT. associated(Me%ExternalVar%Longitude))               &
                stop 'Subroutine ModifyCarbonateSystem - ModuleCarbonateSystem. ERR08'
             Me%ExternalVar%Nitrification1              => Rate_Nitrif1
-            if (.NOT. associated(Me%ExternalVar%Nitrification1))           &
+                if (.NOT. associated(Me%ExternalVar%Nitrification1))          &
                stop 'Subroutine ModifyCarbonateSystem - ModuleCarbonateSystem. ERR09'
             Me%ExternalVar%Nitrification2              => Rate_Nitrif2
-            if (.NOT. associated(Me%ExternalVar%Nitrification2))           &
+               if (.NOT. associated(Me%ExternalVar%Nitrification2))           &
                stop 'Subroutine ModifyCarbonateSystem - ModuleCarbonateSystem. ERR10'
             Me%ExternalVar%Denitrification              => Rate_Denit
-            if (.NOT. associated(Me%ExternalVar%Denitrification))          &
+               if (.NOT. associated(Me%ExternalVar%Denitrification))          &
                stop 'Subroutine ModifyCarbonateSystem - ModuleCarbonateSystem. ERR11'
+            endif
+            
+            
            
             !Associates array dimension (external) to array dimension variable of this module(Me%Array%) 
             Me%Array%ILB = ArraySize%ILB
             Me%Array%IUB = ArraySize%IUB
             
-            !Store in individual variables ratios contained in Ratios array
-            call Biogeochemical_ratios 
+            !Store in individual variables ratios contained in Ratios array, only with biological alk activated
+            if(present(Ratios)) call Biogeochemical_ratios 
             
             !Checks along dimensions of open point 1Darray (grid array converted to 1D) the points with water
 d1:         do index = Me%Array%ILB, Me%Array%IUB            
@@ -999,7 +1005,7 @@ d1:         do index = Me%Array%ILB, Me%Array%IUB
                 else
                     CalcPoint = .true.
                 endif i1               
-            !If the array element contains water (CalcPoint = true), do computations in it 
+               !If the array element contains water (CalcPoint = true), do computations in it 
  i3:           if (CalcPoint) then 
                 call CS_computations(index)  
                endif i3
@@ -1010,12 +1016,15 @@ d1:         do index = Me%Array%ILB, Me%Array%IUB
             nullify(Me%ExternalVar%Temperature)
             nullify(Me%ExternalVar%Mass       )  
             nullify(Me%ExternalVar%Latitude   )  
-            nullify(Me%ExternalVar%Longitude  ) 
-            nullify(Me%ExternalVar%Ratios     ) 
-            nullify(Me%ExternalVar%Nitrification1)
-            nullify(Me%ExternalVar%Nitrification2)
+            nullify(Me%ExternalVar%Longitude  )             
+            if(present(Ratios) .and. present(Rate_Nitrif1) .and. present(Rate_Nitrif2)  & 
+               .and. present(Rate_Denit)) then
+            nullify(Me%ExternalVar%Ratios         ) 
+            nullify(Me%ExternalVar%Nitrification1 )
+            nullify(Me%ExternalVar%Nitrification2 )
             nullify(Me%ExternalVar%Denitrification)
-            
+            endif 
+               
             STAT_ = SUCCESS_
         else               
             STAT_ = ready_
@@ -1333,7 +1342,7 @@ i3:     if (temp > 20.) then
 
       ELSEIF (Me%ComputeOptions%DIC_no_calcification) THEN                     !Not include changes due to calcite prec/dis 
      
-   i4:   if (Me%ComputeOptions%PelagicModel .eq. WaterQualityModel) then 
+   i4:   if (Me%ComputeOptions%PelagicModel .eq. WaterQualityModel) then       ! Water Quality as pelagic model
       
     i5:     if (Me%ExternalRatio%Diatm_are_calculated == 0) then               !Not activated
     

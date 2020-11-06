@@ -3072,7 +3072,7 @@ cd14 :          if (Phosphorus) then
                !Number indexed to each property 
                nProperty = PropertyIndexNumber(PropertyID  )
                call GetNCRatio(WaterQualityID = Me%ObjWaterQuality,                &
-                            Property = nProperty,                                   &
+                            Property = nProperty,                                  &
                             Ratio = Ratio, STAT = STAT_CALL)
                if (STAT_CALL /= SUCCESS_) stop 'GetMyRatio - ModuleInterface - ERR02'  
             end if
@@ -3762,7 +3762,22 @@ cd1 :   if (ready_ .EQ. IDLE_ERR_) then
             if(present(SedimCellVol3D))then
                 call UnfoldMatrix(SedimCellVol3D, Me%SedimCellVol) 
             end if  
-           
+            
+            if(present(Rate_Nitrif1))then
+                call UnfoldMatrix(Rate_Nitrif1, Me%Rate_Nitrif1_1D)
+            end if
+            
+            if(present(Rate_Nitrif2))then
+                call UnfoldMatrix(Rate_Nitrif2, Me%Rate_Nitrif2_1D)
+            end if
+             
+            if(present(Rate_Denit))then
+                call UnfoldMatrix(Rate_Denit, Me%Rate_Denit_1D)
+            end if 
+            
+            if(present(Ratios_forCS))Me%Ratios1D  => Ratios_forCS
+            
+
             
             Me%ExternalVar%WaterPoints3D => WaterPoints3D
             
@@ -4073,16 +4088,11 @@ cd4 :           if (ReadyToCompute) then
                         case(CarbonateSystemModel)  
                             call UnfoldMatrix(Me%ExternalVar%DWZ, Me%Thickness)
                             call UnfoldMatrix(Latitude,     Me%Latitude1D)           
-                            call UnfoldMatrix(Longitude,    Me%Longitude1D)
-                            call UnfoldMatrix(Rate_Nitrif1, Me%Rate_Nitrif1_1D)
-                            call UnfoldMatrix(Rate_Nitrif2, Me%Rate_Nitrif2_1D)
-                            call UnfoldMatrix(Rate_Denit,   Me%Rate_Denit_1D)
+                            call UnfoldMatrix(Longitude,    Me%Longitude1D)                            
                             call GetComputeCurrentTime(Me%ObjTime, Me%ExternalVar%Now, STAT = STAT_CALL)                    
                                  if (STAT_CALL /= SUCCESS_)   stop 'Modify_Interface3D - ModuleInterface - ERR18' 
-                            Me%Ratios1D  => Ratios_forCS
-                            if (.NOT. associated(Me%Ratios1D)) stop 'Modify_Interface3D - ModuleInterface - ERR18b'
-                            
-                            call ModifyCarbonateSystem(Me%ObjCarbonateSystem, &
+                            if(present(Ratios_forCS))then                            
+                               call ModifyCarbonateSystem(Me%ObjCarbonateSystem, &
                                       Me%Salinity,                          &
                                       Me%Temperature,                       &
                                       Me%Thickness,                         &
@@ -4091,13 +4101,26 @@ cd4 :           if (ReadyToCompute) then
                                       Me%Array,                             & 
                                       Me%Latitude1D,                        &
                                       Me%Longitude1D,                       &
-                                      Me%Ratios1D,                      &
+                                      Me%Ratios1D,                          &
                                       Me%Rate_Nitrif1_1D,                   &
                                       Me%Rate_Nitrif2_1D,                   &
                                       Me%Rate_Denit_1D,                     &
                                       STAT_CALL)                                                 
-                           if (STAT_CALL /= SUCCESS_) stop 'Modify_Interface3D - ModuleInterface - ERR18b'   
-                            
+                                      if (STAT_CALL /= SUCCESS_) stop 'Modify_Interface3D - ModuleInterface - ERR18b'   
+                            else
+                               call ModifyCarbonateSystem(Me%ObjCarbonateSystem, &
+                                      Me%Salinity,                          &
+                                      Me%Temperature,                       &
+                                      Me%Thickness,                         &
+                                      Me%Mass,                              &
+                                      Me%OpenPoints,                        &
+                                      Me%Array,                             & 
+                                      Me%Latitude1D,                        &
+                                      Me%Longitude1D,                       &                                      
+                                      STAT = STAT_CALL)                                                 
+                                      if (STAT_CALL /= SUCCESS_) stop 'Modify_Interface3D - ModuleInterface - ERR18c'     
+                            endif                            
+                                  
                     end select
 
 #ifdef _PHREEQC_

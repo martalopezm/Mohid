@@ -15914,7 +15914,8 @@ cd5:                if (TotalVolume > 0.) then
         PropertyX => Me%FirstProperty
         if (Me%ExternalVar%Now .GE. Me%Coupled%CarbonateSystem%NextCompute) then
             do while(associated(PropertyX))                
-                PropertyX%Evolution%SetLimitsTrigger = .true.                
+                PropertyX%Evolution%SetLimitsTrigger = .true.                 
+                if (Me%WQRate_for_CS%Alk_option == 1) then  !If biological alk
                 call Modify_Interface(InterfaceID       = Me%ObjInterfaceCarbSyst,      &   
                                       PropertyID        = PropertyX%ID%IDNumber,        &
                                       Concentration     = PropertyX%Concentration,      &
@@ -15928,8 +15929,21 @@ cd5:                if (TotalVolume > 0.) then
                                       Rate_Nitrif2      = Me%WQRate_for_CS%A_Nitri_2,   &
                                       Rate_Denit        = Me%WQRate_for_CS%A_Denit,     &
                                       STAT              = STAT_CALL)                
-                if (STAT_CALL .NE. SUCCESS_)                                            &
-                    call CloseAllAndStop ('CarbonateSystem_Processes - ModuleWaterProperties - ERR01')
+                     if (STAT_CALL .NE. SUCCESS_)                                       &
+                     call CloseAllAndStop ('CarbonateSystem_Processes - ModuleWaterProperties - ERR01')
+                else                                        !Parametrized alk
+                call Modify_Interface(InterfaceID       = Me%ObjInterfaceCarbSyst,      &   
+                                      PropertyID        = PropertyX%ID%IDNumber,        &
+                                      Concentration     = PropertyX%Concentration,      &
+                                      WaterPoints3D     = Me%ExternalVar%WaterPoints3D, &
+                                      OpenPoints3D      = Me%ExternalVar%OpenPoints3D,  &                                      
+                                      DWZ               = Me%ExternalVar%DWZ,           &
+                                      Latitude          = Me%ExternalVar%Latitude,      &
+                                      Longitude         = Me%ExternalVar%Longitude,     &
+                                      STAT              = STAT_CALL)                
+                     if (STAT_CALL .NE. SUCCESS_)                                       &
+                     call CloseAllAndStop ('CarbonateSystem_Processes - ModuleWaterProperties - ERR02')
+               endif    
                 PropertyX => PropertyX%Next
             end do 
             Me%Coupled%CarbonateSystem%NextCompute = Me%Coupled%CarbonateSystem%NextCompute + Me%Coupled%CarbonateSystem%DT_Compute
@@ -15947,7 +15961,7 @@ cd5:                if (TotalVolume > 0.) then
                                          OpenPoints3D  = Me%ExternalVar%OpenPoints3D,   &
                                          STAT           = STAT_CALL)
                     if (STAT_CALL .NE. SUCCESS_)                                        &
-                        call CloseAllAndStop ('CarbonateSystem_Processes - ModuleWaterProperties - ERR02')
+                        call CloseAllAndStop ('CarbonateSystem_Processes - ModuleWaterProperties - ERR03')
                 endif
             endif
             PropertyX=>PropertyX%Next
