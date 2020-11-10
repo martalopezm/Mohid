@@ -130,9 +130,12 @@ Module ModuleASCII
                      ClientModule = 'ModuleASCII',                  &
                      STAT         = STAT_CALL)        
         if (STAT_CALL /= SUCCESS_) stop 'ReadOptions - ModuleASCII - ERR010'
+        
 
         if (iflag == 0)then
-            write(*,*)'Must specify name of file to convert'
+            write(*,*)'Must specify name of file to convert:'
+            write(*,*)'Keyword INPUT_FILENAME is necessary. Please, write it or' 
+            write(*,*)'verify if it is correctly written as well as the filename'
             stop 'ReadOptions - ModuleASCII - ERR60'
         end if
 
@@ -290,7 +293,10 @@ Module ModuleASCII
              File   = Me%OutputFileName,            &
              STATUS = 'UNKNOWN',                    &
              IOSTAT = STAT_CALL) 
-        if (STAT_CALL /= SUCCESS_) stop 'ReadFileAndWriteOutput - ModuleASCII - ERR03'
+        if (STAT_CALL /= SUCCESS_) then
+        write(*,*)'Verify keyword OUTPUT_FILENAME is correctly written'        
+        stop 'ReadFileAndWriteOutput - ModuleASCII - ERR03'
+        endif
 
         write(*,*)
         write(*,*)"Writing XYZ file. Please wait..."
