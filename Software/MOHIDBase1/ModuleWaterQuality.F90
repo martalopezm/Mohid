@@ -69,7 +69,8 @@ Module ModuleWaterQuality
     public  :: GetWQPropRateFlux   
     public  :: UnGetWQPropRateFlux              
                   
-    public  :: GetNCRatio  
+    public  :: GetNCRatio 
+    public  :: GetWQparameters 
                   
     !Modifier
     public  :: WaterQuality            
@@ -511,8 +512,8 @@ Module ModuleWaterQuality
 
         double precision, pointer, dimension(:,:)   :: Matrix  => null()
         real,             pointer, dimension(:  )   :: IndTerm => null()
-        real, pointer, dimension(:  )               :: NewMass => null()  !Used with Explicit method
-        real, pointer, dimension(:)                 :: Ratios_forCS => null() !marta
+        real, pointer, dimension(:  )               :: NewMass => null()  !Used with Explicit method        
+        real, pointer, dimension(:)                 :: Param_forCS  => null() !marta
         !Instance of Module_EnterData
         integer                                     :: ObjEnterData = 0
 
@@ -659,8 +660,8 @@ cd2:        if (.NOT. Me%CalcMethod%ExplicitMethod) then
         nullify(Me%AmmoniaUptake           )
         nullify(Me%Matrix                  )
         nullify(Me%IndTerm                 )
-        nullify(Me%NewMass                 )
-        nullify(Me%Ratios_forCS            )
+        nullify(Me%NewMass                 )       
+        nullify(Me%Param_forCS             )
 
     end Subroutine Nullify_all_Sub_Type_Pointers    
     
@@ -4021,12 +4022,12 @@ cd1 :   if (Me%CalcMethod%ExplicitMethod) then
                 stop 'Subroutine AllocateVariables - ModuleWaterQuality. ERR01.'
         end if cd1
 
-cd2 :   if (Me%PropCalc%Diatoms) then 
-           allocate(Me%Ratios_forCS(1:7),STAT = STAT_CALL)
+cd2 :   if (Me%PropCalc%Diatoms) then            
+           allocate(Me%Param_forCS(1:12),STAT = STAT_CALL)
            if (STAT_CALL .NE. SUCCESS_)                                        &
-                stop 'Subroutine AllocateVariables - ModuleWaterQuality. ERR02.'
-        else 
-           allocate(Me%Ratios_forCS(1:5),STAT = STAT_CALL)
+                stop 'Subroutine AllocateVariables - ModuleWaterQuality. ERR02.'           
+        else            
+           allocate(Me%Param_forCS(1:10),STAT = STAT_CALL)
            if (STAT_CALL .NE. SUCCESS_)                                        &
                 stop 'Subroutine AllocateVariables - ModuleWaterQuality. ERR03.'
        end if cd2
@@ -4046,13 +4047,12 @@ cd2 :   if (Me%PropCalc%Diatoms) then
     !++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
     !++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-    subroutine GetNCRatio(WaterQualityID, Property, Ratio, Ratios_, STAT)
+    subroutine GetNCRatio(WaterQualityID, Property, Ratio, STAT)
 
         !Arguments-------------------------------------------------------------
         integer                                   :: WaterQualityID
         real, optional                            :: Ratio
-        integer , optional                        :: Property
-        real, pointer, dimension(:), optional     :: Ratios_  !marta
+        integer , optional                        :: Property        
         integer, optional, intent(OUT)            :: STAT    
         !External--------------------------------------------------------------
         integer                         :: ready_
@@ -4067,28 +4067,7 @@ cd2 :   if (Me%PropCalc%Diatoms) then
 
 cd1 : if ((ready_ .EQ. IDLE_ERR_     ) .OR.                                 &
             (ready_ .EQ. READ_LOCK_ERR_)) then
-    
-   i1:  if(present(Ratios_))then
-           Me%Ratios_forCS(:) = 0.0
-                if (Me%PropCalc%Diatoms) then                    
-                    Me%Ratios_forCS(1) = Me%AlfaPhytoNC
-                    Me%Ratios_forCS(2) = Me%AlfaPhytoPC
-                    Me%Ratios_forCS(3) = Me%AlfaZooNC  
-                    Me%Ratios_forCS(4) = Me%AlfaZooPC
-                    Me%Ratios_forCS(5) = 1.
-                    Me%Ratios_forCS(6) = Me%Diatoms%DiaAlfaNC
-                    Me%Ratios_forCS(7) = Me%Diatoms%DiaAlfaPC    
-                else                 
-                    Me%Ratios_forCS(1) = Me%AlfaPhytoNC
-                    Me%Ratios_forCS(2) = Me%AlfaPhytoPC
-                    Me%Ratios_forCS(3) = Me%AlfaZooNC  
-                    Me%Ratios_forCS(4) = Me%AlfaZooPC
-                    Me%Ratios_forCS(5) = 0. !Key value to pass to carbonate system module to know if diatoms are calculated 
-                endif 
-          Ratios_ => Me%Ratios_forCS  
-          if (.not. associated(Ratios_ )) stop 'ModuleWaterQuality-GetNCRatio- ERROR 01'
-          
-        else  
+
             !Ratio of gN in g dry substance according to Redfiel: 16mol*14gN/mol / 2749 gTS
             AlphaNTS = 16.*14./2749.
             Ratio = 1.0/AlphaNTS  !for all non-living VSS as PON and PONr
@@ -4096,8 +4075,7 @@ cd1 : if ((ready_ .EQ. IDLE_ERR_     ) .OR.                                 &
             if (Property == Me%PropIndex%Diatoms                ) Ratio = Me%OMAlfaNC      /AlphaNTS
             if (Property == Me%PropIndex%Zoo                    ) Ratio = Me%AlfaZooNC     /AlphaNTS
             if (Property == Me%PropIndex%Ciliate                ) Ratio = Me%AlfaCilNC     /AlphaNTS
-            if (Property == Me%PropIndex%Bacteria               ) Ratio = Me%AlfaBacteriaNC/AlphaNTS
-        endif i1      
+            if (Property == Me%PropIndex%Bacteria               ) Ratio = Me%AlfaBacteriaNC/AlphaNTS             
         
             STAT_ = SUCCESS_
       else 
@@ -4112,7 +4090,75 @@ cd1 : if ((ready_ .EQ. IDLE_ERR_     ) .OR.                                 &
     end subroutine GetNCRatio
 
     !--------------------------------------------------------------------------
+    
+    
+    
+    
+   !>@author Marta López, Maretec
+   !>@Brief: Stores in 1D array several parameters, red in WaterQuality.dat, to 
+   !> later provide them to CarbonateSystemModule
+    
+    subroutine GetWQparameters(WaterQualityID, List, STAT)
+    !Arguments-------------------------------------------------------------
+        integer                                   :: WaterQualityID
+        real, pointer, dimension(:)               :: List  
+        integer, optional, intent(OUT)            :: STAT    
+        !External--------------------------------------------------------------
+        integer                         :: ready_
+        !Local-----------------------------------------------------------------
+        integer                         :: STAT_
+        !----------------------------------------------------------------------
 
+        STAT_ = UNKNOWN_
+
+        call Ready(WaterQualityID, ready_)
+
+cd1 : if ((ready_ .EQ. IDLE_ERR_     ) .OR.                                 &
+           (ready_ .EQ. READ_LOCK_ERR_)) then
+    
+           Me%Param_forCS(:) = 0.0   !Array initialization
+                if (Me%PropCalc%Diatoms) then   
+                    Me%Param_forCS(1)  = 1.           !Diatoms are activated
+                    Me%Param_forCS(2)  = Me%AlfaPhytoNC
+                    Me%Param_forCS(3)  = Me%AlfaPhytoPC
+                    Me%Param_forCS(4)  = Me%AlfaZooNC  
+                    Me%Param_forCS(5)  = Me%AlfaZooPC                    
+                    Me%Param_forCS(6)  = Me%MinOxygen
+                    Me%Param_forCS(7)  = Me%TNitrification
+                    Me%Param_forCS(8)  = Me%NitrificationSatConst
+                    Me%Param_forCS(9)  = Me%KNitrificationRateK1
+                    Me%Param_forCS(10) = Me%KNitrificationRateK2                  
+                    Me%Param_forCS(11) = Me%Diatoms%DiaAlfaNC
+                    Me%Param_forCS(12) = Me%Diatoms%DiaAlfaPC    
+                else  
+                    Me%Param_forCS(1)  = 0. !Key value to pass to carbonate system module to know if diatoms are calculated
+                    Me%Param_forCS(2)  = Me%AlfaPhytoNC
+                    Me%Param_forCS(3)  = Me%AlfaPhytoPC
+                    Me%Param_forCS(4)  = Me%AlfaZooNC  
+                    Me%Param_forCS(5)  = Me%AlfaZooPC                    
+                    Me%Param_forCS(6)  = Me%MinOxygen
+                    Me%Param_forCS(7)  = Me%TNitrification
+                    Me%Param_forCS(8)  = Me%NitrificationSatConst
+                    Me%Param_forCS(9)  = Me%KNitrificationRateK1
+                    Me%Param_forCS(10) = Me%KNitrificationRateK2 
+                endif 
+           List => Me%Param_forCS  
+           if (.not. associated(List)) stop 'ModuleWaterQuality-GetWQparameters- ERROR 01'
+          
+           STAT_ = SUCCESS_
+      else 
+            STAT_ = ready_
+      end if cd1
+        
+       if (present(STAT))STAT = STAT_
+
+    !----------------------------------------------------------------------
+
+    end subroutine GetWQparameters
+
+    !--------------------------------------------------------------------------
+    
+    
 
     subroutine GetWaterQualitySize(WaterQualityID, PropLB, PropUB, STAT)
 
@@ -8037,11 +8083,10 @@ subroutine WQAmmonia(index, RefrAmmoniaMinRate,                                 
 
         NitrificationRateK1 = Me%KNitrificationRateK1 * Me%TNitrification                               &
                          **(Me%ExternalVar%Temperature(index) - 20.0) * x5
-      !write(*,*)'nitrificationratek1=',NitrificationRateK1 !marta
-    
+     
         NitrificationRateK2 = Me%KNitrificationRateK2 * Me%TNitrification                           &
                          **(Me%ExternalVar%Temperature(index) - 20.0) * x5
-       !write(*,*)'nitrificationratek1=',NitrificationRateK2    !marta              
+                
                                             
     !MineralizationRate-------------------------------------------------------
 
@@ -8142,7 +8187,7 @@ cd3 :       if (.NOT.Me%PropCalc%Bacteria) then
    !Calculation of system coeficients---------------------------------------
 
        Me%Matrix(AM, AM   ) = 1.0 + NitrificationRateK1 * DTDay
-      ! write(*,*)'Me%matrix(AM;AM)=', Me%Matrix(AM, AM   )   !marta  
+ 
 
        if (.NOT.Me%PropCalc%Bacteria) then
        
@@ -9051,10 +9096,10 @@ cd4 :           if (associated(Me%NewMass)) then
                 end if cd4
 
 
-                deallocate(Me%Ratios_forCS, STAT = STAT_CALL)
+               deallocate(Me%Param_forCS, STAT = STAT_CALL)
                 if (STAT_CALL .NE. SUCCESS_)                                    &
                     stop 'Subroutine Kill_WaterQuality - ModuleWaterQuality. ERR05.'
-                nullify(Me%Ratios_forCS)
+                nullify(Me%Param_forCS)
 
 
                 call DeallocateInstance

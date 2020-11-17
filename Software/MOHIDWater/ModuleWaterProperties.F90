@@ -247,7 +247,7 @@ Module ModuleWaterProperties
                                           UngetAdvectionDiffusion, KillAdvectionDiffusion
     use ModuleInterface,            only: ConstructInterface, Modify_Interface,                 &
                                           UpdateMassDimensions, GetRateFlux, KillInterface,     &
-                                          SetSettlementOnInterface, GetWQRatio
+                                          SetSettlementOnInterface, GetWQParam
     use ModuleFreeVerticalMovement, only: Construct_FreeVerticalMovement, GetFreeVertMovOptions,&
                                           Kill_FreeVerticalMovement,Modify_FreeVerticalMovement,&
                                           FreeVertPropertyExists, FreeVertPropertyHasDeposition,&
@@ -12646,8 +12646,7 @@ cd1 :   if (ready_ .EQ. IDLE_ERR_) then
             if (Me%Coupled%WWTPQM%Yes)                        &
                 call WWTPQ_Processes
             
-            if (Me%Coupled%CarbonateSystem%Yes)               &
-                call CarbonateSystem_Processes
+           
 
 #ifdef _PHREEQC_
             if (Me%Coupled%PhreeqC%Yes .and. .not. Me%PhreeqCOnlyForStart)                       &
@@ -12660,10 +12659,13 @@ cd1 :   if (ready_ .EQ. IDLE_ERR_) then
 
             if (Me%Coupled%Bivalve%Yes)                       &
                 call Bivalve_Processes
-
+             
             if (Me%Coupled%MinimumConcentration%Yes .or.      &
                 Me%Coupled%MaximumConcentration%Yes)          &
                 call SetLimitsConcentration(PhysicalProcesses = .false.) !('Bivalve Processes')
+            
+           if (Me%Coupled%CarbonateSystem%Yes)                &
+                call CarbonateSystem_Processes
 
             if (Me%Coupled%Partition%Yes)                     &
                 call Partition_Processes
@@ -15587,7 +15589,8 @@ cd5:                if (TotalVolume > 0.) then
               !WQM%DT_Compute is DTSecond of WaterQuality:time step, in seconds, between 2 WaterQuality calls
               where (Me%ExternalVar%OpenPoints3D == WaterPoint) &
                     WqRateX%Field = WqRateX%Field * Me%ExternalVar%VolumeZ/ Me%Coupled%WQM%DT_Compute               
-              
+                   !write(*,*) 'volumen=', Me%ExternalVar%VolumeZ(:,:,5)
+                   !write(*,*) 'tasa', WqRateX%Field(:,:,5)
               !If CSmodule is activated with biological alkalinity, store the needed rates for it
  i1:          if ((Me%ObjInterfaceCarbSyst == 2) .and. (Me%WQRate_for_CS%Alk_option == 1)) then 
                  call WQrates_for_CS (WqRateX%Field,WqRateX%FirstProp%Name,WqRateX%SecondProp%Name)                  
@@ -15905,17 +15908,19 @@ cd5:                if (TotalVolume > 0.) then
         !Begin-----------------------------------------------------------------
         if (MonitorPerformance) call StartWatch ("ModuleWaterProperties", "CarbonateSystem_Processes")  
         
-        !Get the Water Quality Nitrogen/Carbon and Phosphorous/Carbon ratios of phyto, zoo and, 
-        !if activated, diatoms. 
-        call GetWQRatio(InterfaceID   = Me%ObjInterface, Ratios_for_CS = RatiosList, STAT = STAT_CALL)
-         if (STAT_CALL /= SUCCESS_) call CloseAllAndStop ('CarbonateSystem_Processes- ModuleWaterProperties - ERR00')
-       
+        !If alk_bio, get the Water Quality Nitrogen/Carbon and Phosphorous/Carbon ratios of phyto, zoo and, 
+        !if activated, diatoms. Also, get several parameters stablished in WaterQuality.dat 
+        if (Me%WQRate_for_CS%Alk_option == 1) then
+           call GetWQParam(InterfaceID   = Me%ObjInterface, Ratios_and_Param_for_CS = RatiosList, STAT = STAT_CALL)
+           if (STAT_CALL /= SUCCESS_) call CloseAllAndStop ('CarbonateSystem_Processes- ModuleWaterProperties - ERR00')
+        endif
+        
         !First call. Prepares variables for calculations; converts 3D arrays into 1D vectors              
         PropertyX => Me%FirstProperty
         if (Me%ExternalVar%Now .GE. Me%Coupled%CarbonateSystem%NextCompute) then
             do while(associated(PropertyX))                
                 PropertyX%Evolution%SetLimitsTrigger = .true.                 
-                if (Me%WQRate_for_CS%Alk_option == 1) then  !If biological alk
+                if (Me%WQRate_for_CS%Alk_option == 1) then  !If biological alk               
                 call Modify_Interface(InterfaceID       = Me%ObjInterfaceCarbSyst,      &   
                                       PropertyID        = PropertyX%ID%IDNumber,        &
                                       Concentration     = PropertyX%Concentration,      &

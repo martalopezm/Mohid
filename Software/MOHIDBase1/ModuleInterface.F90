@@ -89,6 +89,7 @@ Module ModuleInterface
     !Selector
     public  :: GetRateFlux
     public  :: GetWQRatio
+    public  :: GetWQParam
     
 #ifdef _PHREEQC_       
     public  :: GetPhreeqCID
@@ -3037,19 +3038,18 @@ cd14 :          if (Phosphorus) then
     !++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
     
     
-    !>@author: Modified by Marta López, Maretec
-    !>@Brief: Makes the conexion between WaterPropeties or DrainageNetwork(DN) and 
-    !> Water Quality, by sending an array (for CarbonateSystem), or a value (DN), 
-    !> that contains biogeochemical ratios (as N/C or P/C).
-    !>@param[in] interfaceID 
-    !>@param[out] PropertyID, Ratio, Ratios_for_CS, STAT
+    !>@author: Modified by Marta López, 2020
+    !>@Brief: Makes the conexion between DrainageNetwork(DN) and Water Quality 
+    !> by sending the ratio of gN in g dry substance according to Redfiel, for
+    !> different properties. 
+    !>@param[in] interfaceID, PropertyID 
+    !>@param[out] Ratio, STAT
     !--------------------------------------------------------------------------
-    subroutine GetWQRatio(interfaceID, PropertyID, Ratio, Ratios_for_CS, STAT)
+    subroutine GetWQRatio(interfaceID, PropertyID, Ratio, STAT)
         !Arguments-----------------------------------------------------------------
         integer                                            :: InterfaceID
-        integer, optional                                  :: PropertyID
-        real, optional                                     :: Ratio
-        real, dimension(:), pointer, optional, intent(OUT) :: Ratios_for_CS !marta
+        integer                                            :: PropertyID
+        real                                               :: Ratio       
         integer, optional, intent(OUT)                     :: STAT        
         !External--------------------------------------------------------------
         integer                                         :: ready_, STAT_CALL
@@ -3060,22 +3060,15 @@ cd14 :          if (Phosphorus) then
         STAT_ = UNKNOWN_
         
         call Ready(InterfaceID, ready_)
-        
-        if ((ready_ .EQ. IDLE_ERR_) .OR. (ready_ .EQ. READ_LOCK_ERR_)) then         
+        if ((ready_ .EQ. IDLE_ERR_) .OR. (ready_ .EQ. READ_LOCK_ERR_)) then        
+                       
+          !Number indexed to each property 
+          nProperty = PropertyIndexNumber(PropertyID  )
+          call GetNCRatio(WaterQualityID = Me%ObjWaterQuality,                &
+                                Property = nProperty,                         &
+                                   Ratio = Ratio, STAT = STAT_CALL)
+          if (STAT_CALL /= SUCCESS_) stop 'GetMyRatio - ModuleInterface - ERR01'  
             
-            if (present(Ratios_for_CS)) then 
-               call GetNCRatio(WaterQualityID = Me%ObjWaterQuality,   &
-                               Ratios_ = Ratios_for_CS,               &
-                               STAT =  STAT_CALL)
-               if (STAT_CALL /= SUCCESS_) stop 'GetMyRatio - ModuleInterface - ERR01'
-            else   
-               !Number indexed to each property 
-               nProperty = PropertyIndexNumber(PropertyID  )
-               call GetNCRatio(WaterQualityID = Me%ObjWaterQuality,                &
-                            Property = nProperty,                                  &
-                            Ratio = Ratio, STAT = STAT_CALL)
-               if (STAT_CALL /= SUCCESS_) stop 'GetMyRatio - ModuleInterface - ERR02'  
-            end if
         STAT_ = SUCCESS_  
         end if
         
@@ -3085,6 +3078,45 @@ cd14 :          if (Phosphorus) then
 
     end subroutine GetWQRatio
     !--------------------------------------------------------------------------
+    
+    
+    
+    !>@author: Marta López, Maretec
+    !>@Brief: Makes the conexion between WaterPropeties and Water Quality, by 
+    !> sending an array (which will be later send to CarbonateSystem) that 
+    !> contains biogeochemical ratios (as N/C or P/C), as well as parameters
+    !> used in WaterQuality.
+    !>param[in] interfaceID !>param[out] Ratios_and_Param_for_CS, STAT
+    !--------------------------------------------------------------------------
+    subroutine GetWQParam(interfaceID, Ratios_and_Param_for_CS, STAT)
+        !Arguments-------------------------------------------------------------
+        integer                                            :: InterfaceID
+        real, dimension(:), pointer, intent(OUT)           :: Ratios_and_Param_for_CS 
+        integer, optional, intent(OUT)                     :: STAT        
+        !External--------------------------------------------------------------
+        integer                                         :: ready_, STAT_CALL
+        !Local-----------------------------------------------------------------
+        integer                                         :: STAT_ 
+        !----------------------------------------------------------------------
+        STAT_ = UNKNOWN_
+        
+        call Ready(InterfaceID, ready_)        
+        if ((ready_ .EQ. IDLE_ERR_) .OR. (ready_ .EQ. READ_LOCK_ERR_)) then   
+             
+               call GetWQparameters(WaterQualityID = Me%ObjWaterQuality,   &
+                                    List = Ratios_and_Param_for_CS,        &
+                                    STAT =  STAT_CALL)
+               if (STAT_CALL /= SUCCESS_) stop 'GetWQParam - ModuleInterface - ERR01'
+           
+               STAT_ = SUCCESS_  
+        end if
+        
+        if (present(STAT)) STAT = STAT_
+
+        !----------------------------------------------------------------------
+    end subroutine GetWQParam
+    !--------------------------------------------------------------------------
+    
    
 #ifdef _PHREEQC_    
     !--------------------------------------------------------------------------
@@ -4955,7 +4987,7 @@ cd4 :           if (ReadyToCompute) then
                                                        
                             
                          case(CarbonateSystemModel)
-                            call UnfoldMatrix(Me%ExternalVar%DWZ1D, Me%Thickness)                                                     
+                            call UnfoldMatrix(Me%ExternalVar%DWZ1D, Me%Thickness)                                          
                             call GetComputeCurrentTime(Me%ObjTime,                  &
                                                        Me%ExternalVar%Now,          &
                                                        STAT = STAT_CALL)                    

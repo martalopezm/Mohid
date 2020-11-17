@@ -15103,7 +15103,7 @@ if1:    if (Property%Diffusion_Scheme == CentralDif) then
                 
                 do NodeID = 1, Me%TotalNodes
 
-                    if ( (Me%OpenPointsProcess (NodeID) == OpenPoint) .and. (Me%Nodes (NodeID)%VolumeNew .gt. 0.0)) then                    
+                    if ( (Me%OpenPointsProcess (NodeID) == OpenPoint) .and. (Me%Nodes (NodeID)%VolumeNew .gt. 0.0)) then                  
                         
                         CurrNode => Me%Nodes (NodeID)
                         
