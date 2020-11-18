@@ -1232,12 +1232,16 @@ cd0 :   if (ready_ .EQ. OFF_ERR_) then
                 if (STAT_CALL .NE. SUCCESS_)stop 'AllocateVariables - ModuleInterface - ERR165' 
                 
                 allocate(Me%Rate_Denit_1D(ArrayLB:ArrayUB), STAT = STAT_CALL)
-                if (STAT_CALL .NE. SUCCESS_)stop 'AllocateVariables - ModuleInterface - ERR166' 
+                if (STAT_CALL .NE. SUCCESS_)stop 'AllocateVariables - ModuleInterface - ERR166'
+                
+                allocate(Me%WaterVolume1D(ArrayLB:ArrayUB), STAT = STAT_CALL)
+                if (STAT_CALL .NE. SUCCESS_)stop 'AllocateVariables - ModuleInterface - ERR167'
                 
                 Me%Salinity             = FillValueReal
                 Me%Thickness            = FillValueReal
                 Me%Latitude1D           = FillValueReal
                 Me%Longitude1D          = FillValueReal
+                Me%WaterVolume1D        = FillValueReal
                 Me%Rate_Nitrif1_1D      = FillValueReal
                 Me%Rate_Nitrif2_1D      = FillValueReal
                 Me%Rate_Denit_1D        = FillValueReal
@@ -3006,7 +3010,9 @@ cd14 :          if (Phosphorus) then
                        write(*,*) 'Property ',GetPropertyName(CarbonateSystemList(i)),' not found in the CarbonateSystem list'
                        write(*,*) 'Please check (in Water Properties.dat file) if keyword CARBSYST should be on' 
                        write(*,*) 'or if the property name', GetPropertyName(CarbonateSystemList(i))
-                       write(*,*) 'is right. In case of alkalinity, or DIC, verify that property name is the one'
+                       write(*,*) 'is right. Note for biological alkalinity, at least ammonia, nitrite, nitrate, phytoplankton'
+                       write(*,*) 'and zooplankton must have, along with WATERQUALITY keyword,CARBSYST keyword on (:1)'
+                       write(*,*) 'In case of alkalinity, or DIC, verify that property name is the one'
                        write(*,*) 'that matches with the compute option defined in the carbsyst.dat file'
                              stop 'Properties lists inconsistent  - Check_Options- ModuleInterface- ERR90'    
                    end if
@@ -4134,6 +4140,7 @@ cd4 :           if (ReadyToCompute) then
                                       Me%Latitude1D,                        &
                                       Me%Longitude1D,                       &
                                       Me%Ratios1D,                          &
+                                      Me%WaterVolume1D,                     &
                                       Me%Rate_Nitrif1_1D,                   &
                                       Me%Rate_Nitrif2_1D,                   &
                                       Me%Rate_Denit_1D,                     &
@@ -5000,7 +5007,8 @@ cd4 :           if (ReadyToCompute) then
                                       Me%Mass,                                 &
                                       Me%OpenPoints,                           &
                                       Me%Array,                                &
-                                      Me%Ratios1D,                         & 
+                                      Me%Ratios1D,                             &
+                                      Me%WaterVolume1D,                        &
                                       Me%Latitude1D,                           &
                                       Me%Longitude1D,                          &
                                       Me%Rate_Nitrif1_1D,                      &
@@ -5031,28 +5039,9 @@ do6 :               do index = ArrayLB, ArrayUB
 
                 DT = InterfaceDT()
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
                 !$OMP PARALLEL PRIVATE(Index,i)
-
-
-
                 !$OMP DO SCHEDULE(STATIC)
                 do Index = Me%Array%ILB, Me%Array%IUB
-
                     i = Me%Index2I(Index)
                     !Concentrations are only actualized in OpenPoints because of instability
                     !in waterpoints that are not openpoints
@@ -5061,10 +5050,6 @@ do6 :               do index = ArrayLB, ArrayUB
                                                 Me%ConcentrationIncrement(nProperty, Index) * DTProp / DT 
                     end if
                 enddo
-
-
-
-
                 !$OMP END DO NOWAIT
                 !$OMP END PARALLEL
 
@@ -8774,6 +8759,22 @@ cd1 :   if (ready_ .NE. OFF_ERR_) then
                         if (STAT_CALL .NE. SUCCESS_) stop 'KillInterface - ModuleInterface - ERR30'
                         
                     case(CarbonateSystemModel)
+                        
+                        if(associated(Me%WaterVolume1D))then
+                           deallocate(Me%WaterVolume1D, STAT = STAT_CALL)
+                           if (STAT_CALL .NE. SUCCESS_) stop 'KillInterface - ModuleInterface - ERR35.1'
+                        end if
+                        
+                        if(associated(Me%Latitude1D ))then
+                           deallocate(Me%Latitude1D , STAT = STAT_CALL)
+                           if (STAT_CALL .NE. SUCCESS_) stop 'KillInterface - ModuleInterface - ERR35.2'
+                        end if
+                        
+                         if(associated(Me%Longitude1D ))then
+                           deallocate(Me%Longitude1D , STAT = STAT_CALL)
+                           if (STAT_CALL .NE. SUCCESS_) stop 'KillInterface - ModuleInterface - ERR35.2'
+                        end if                       
+                         !marta:anhadir las que falten
 
                         call KillCarbonateSystem(Me%ObjCarbonateSystem, STAT = STAT_CALL)
                         if (STAT_CALL .NE. SUCCESS_) stop 'KillInterface - ModuleInterface - ERR35'

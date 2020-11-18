@@ -6431,8 +6431,7 @@ cd12 :       if (BlockFound) then
                                 WaterPoints3D       = Me%ExternalVar%WaterPoints3D,  &
                                 Size3D              = Me%WorkSize,                   &
                                 Vertical1D          = Me%ExternalVar%Vertical1D,     &
-                                CarbonateSystemID   = CarbonateSystemID,             & 
-                                !RatiosList_CS       = RatiosList,                    &   
+                                CarbonateSystemID   = CarbonateSystemID,             &                                  
                                 STAT = STAT_CALL)                                     
         if (STAT_CALL /= SUCCESS_)                                                   &
             call CloseAllAndStop ('CoupleCarbonateSystem- ModuleWaterProperties - ERR01')
@@ -15585,12 +15584,19 @@ cd5:                if (TotalVolume > 0.) then
               if (STAT_CALL .NE. SUCCESS_)                                                &
               call CloseAllAndStop ('WaterQuality_Processes - ModuleWaterProperties - ERR04')
               
-              !If the grid point has water, convert the "rate" (mg/l) into a mass rate (mg/dtsec)
+              !If the grid point/cell has water, multiply the rate (mg/l) by cell volumen(l)
+              !After that, divide the new cell-rate (mg) by time step (mg/dtsec)              
               !WQM%DT_Compute is DTSecond of WaterQuality:time step, in seconds, between 2 WaterQuality calls
+              
+              !write(*,*) 'antesdevolumen=', WqRateX%Field(:,24,36)
               where (Me%ExternalVar%OpenPoints3D == WaterPoint) &
-                    WqRateX%Field = WqRateX%Field * Me%ExternalVar%VolumeZ/ Me%Coupled%WQM%DT_Compute               
-                   !write(*,*) 'volumen=', Me%ExternalVar%VolumeZ(:,:,5)
-                   !write(*,*) 'tasa', WqRateX%Field(:,:,5)
+                    WqRateX%Field = WqRateX%Field * Me%ExternalVar%VolumeZ
+              !write(*,*) 'despuesdevolumen=', WqRateX%Field(:,24,36)
+                    WqRateX%Field = WqRateX%Field/ Me%Coupled%WQM%DT_Compute
+               !write(*,*) 'despuesdedt=', WqRateX%Field(:,24,36)      
+              !where (Me%ExternalVar%OpenPoints3D == WaterPoint) &
+                    !WqRateX%Field = WqRateX%Field * Me%ExternalVar%VolumeZ/ Me%Coupled%WQM%DT_Compute               
+               
               !If CSmodule is activated with biological alkalinity, store the needed rates for it
  i1:          if ((Me%ObjInterfaceCarbSyst == 2) .and. (Me%WQRate_for_CS%Alk_option == 1)) then 
                  call WQrates_for_CS (WqRateX%Field,WqRateX%FirstProp%Name,WqRateX%SecondProp%Name)                  
@@ -15915,7 +15921,7 @@ cd5:                if (TotalVolume > 0.) then
            if (STAT_CALL /= SUCCESS_) call CloseAllAndStop ('CarbonateSystem_Processes- ModuleWaterProperties - ERR00')
         endif
         
-        !First call. Prepares variables for calculations; converts 3D arrays into 1D vectors              
+        !First call. Prepares variables for calculations; converts, and sends, 3D-2D arrays into 1D vectors              
         PropertyX => Me%FirstProperty
         if (Me%ExternalVar%Now .GE. Me%Coupled%CarbonateSystem%NextCompute) then
             do while(associated(PropertyX))                
@@ -15930,11 +15936,12 @@ cd5:                if (TotalVolume > 0.) then
                                       Latitude          = Me%ExternalVar%Latitude,      &
                                       Longitude         = Me%ExternalVar%Longitude,     &
                                       Ratios_forCS      = RatiosList,                   &
+                                      WaterVolume       = Me%ExternalVar%VolumeZ,       &
                                       Rate_Nitrif1      = Me%WQRate_for_CS%A_Nitri_1,   &
                                       Rate_Nitrif2      = Me%WQRate_for_CS%A_Nitri_2,   &
                                       Rate_Denit        = Me%WQRate_for_CS%A_Denit,     &
                                       STAT              = STAT_CALL)                
-                     if (STAT_CALL .NE. SUCCESS_)                                       &
+                     if (STAT_CALL .NE. SUCCESS_)                                      &
                      call CloseAllAndStop ('CarbonateSystem_Processes - ModuleWaterProperties - ERR01')
                 else                                        !Parametrized alk
                 call Modify_Interface(InterfaceID       = Me%ObjInterfaceCarbSyst,      &   

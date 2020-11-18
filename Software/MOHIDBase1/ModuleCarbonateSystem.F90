@@ -185,21 +185,22 @@
       public  :: GetCarbonateSystemPropIndex
       public  :: UnGetCarbonateSystem
     
-    !Modifier         
-      public  :: ModifyCarbonateSystem                 !Model calculations
-      private :: CS_computations
-      private :: ComputeAlkalinity_param
-      private :: ComputeAlkalinity_bio
-      private :: Biogeochemical_ratios_and_parameters
-      !private :: ComputeDIC_calc
-      !private :: ComputeDIC_no_calc
-      !private :: Computemocsy
-      !private ::   Computemocsy_1_
+    !Modifier                                          !Model calculations
+      public  :: ModifyCarbonateSystem                 !Associates external variables, call subr to do calculations 
+      private ::  Biogeochemical_ratios_and_parameters !If alkbio, stores some pelagicmodule param as glovbal CS var          
+      private ::  CS_computations                      !Call, in a concrete order, subroutines starting as Compute 
+      private ::   ComputeAlkalinity_param             !Calculates alkalinity through salt and tem,depending on grid area
+      private ::   ComputeAlkalinity_bio               !Calculates alkalinity taking into account changes due to biological activity    
+      private ::     Compute_biogeochem_rates_for_alk_bio      
+      !private ::  ComputeDIC_calc
+      !private ::  ComputeDIC_no_calc
+      !private ::  Computemocsy
+      !private ::    Computemocsy_1_
     
     !Destructor        
       public  :: KillCarbonateSystem   
       private :: DeAllocateInstance
-    
+ 
     !Management     
       private :: Ready
       private :: LocateObjCarbonateSystem
@@ -249,6 +250,8 @@
         integer                         :: DIC_cs_c         = null_int   ! Dissolved inorganic carbon concentration (calcifi) 
         integer                         :: DIC_cs_nc        = null_int   ! Dissolved inorganic carbon concentration (no calc) 
         integer                         :: AM               = null_int   ! External ammonia concentration
+        integer                         :: NI               = null_int   ! External nitrite concentration
+        integer                         :: NA               = null_int   ! External nitrate concentration
         integer                         :: Oxygen           = null_int   ! External oxygen concentration
     end type T_PropIndex       
       
@@ -265,18 +268,19 @@
     type       T_ExternalVar               
         real, pointer, dimension(:  )       :: Salinity       !Salinity        1D array. Origin: WaterPropertiesModule
         real, pointer, dimension(:  )       :: Temperature    !Temperature     1D array. Origin: WaterPropertiesModule
-        real, pointer, dimension(:  )       :: Thickness      !Cell?thickness  1D array. Origin: GeometryModule,original name DWZ
+        real, pointer, dimension(:  )       :: Thickness      !Cell thickness  1D array. Origin: GeometryModule,original name DWZ
         real, pointer, dimension(:,:)       :: Mass           !Property mass   2D array. Origin: WaterPropertiesModule
         real, pointer, dimension(:  )       :: Latitude       !Latitude        1D array. Origin: HorizontalGridModule
         real, pointer, dimension(:  )       :: Longitude      !Longitude       1D array. Origin: HorizontalGridModule 
         real, pointer, dimension(:  )       :: Ratios         !Biogeoch ratios 1D array. Origin: WaterQualityModule or Life !marta
+        real, pointer, dimension(:  )       :: VolumenZ       !Cell volume (L) 1D array. Origin: GeometryModule
         real, pointer, dimension(:  )       :: Parameters     !Biogeoch param  1D array. Origin: WaterQualityModule or Life
         real, pointer, dimension(:  )       :: Nitrification1 !Nitrif1         1D array. Origin: WaterQualityModule 
         real, pointer, dimension(:  )       :: Nitrification2 !Nitrif2         1D array. Origin: WaterQualityModule
         real, pointer, dimension(:  )       :: Denitrification!Denit           1D array. Origin: WaterQualityModule
         integer, pointer, dimension(:  )    :: OpenPoints     !Grid points with water where perform calculations. Origin: MapModule              
     end type T_ExternalVar               !Latitude and latitude are geographic coordenates in decimal format
-                                         !Latitude, Longitude, Thickness and OpenPoints are gotten by WaterPropertiesModule
+                                         !Latitude, Longitude, Thickness, OpenPoints and Volumen are gotten by WaterPropertiesModule
 
     private ::  T_ExternalRatio                          
     type       T_ExternalRatio              
@@ -290,12 +294,17 @@
     end type T_ExternalRatio  
     
     private ::  T_ExternalParameter                         
-    type       T_ExternalParameter              
-        real            :: MinOxygen             = null_real    
-        real            :: TNitrification        = null_real
-        real            :: NitrificationSatConst = null_real   
-        real            :: KNitrificationRateK1  = null_real
-        real            :: KNitrificationRateK2  = null_real 
+    type       T_ExternalParameter 
+        real            :: pelagic_module_dt       = null_real          
+        real            :: pelagic_module_dt_day   = null_real
+        real            :: MinOxygen               = null_real    
+        real            :: TNitrification          = null_real
+        real            :: NitrificationSatConst   = null_real   
+        real            :: KNitrificationRateK1    = null_real
+        real            :: KNitrificationRateK2    = null_real 
+        real            :: KDenitrificationRate    = null_real
+        real            :: TDenitrification        = null_real
+        real            :: DenitrificationSatConst = null_real
     end type T_ExternalParameter  
 
 
@@ -304,8 +313,8 @@
         integer                                         :: InstanceID
         integer                                         :: ObjEnterData         = 0
         integer, dimension(:), pointer                  :: PropertyList         => null()
-        !real                                            :: DT
-        !real                                            :: DT_day
+        !real                                           :: DT
+        !real                                           :: DT_day
         type(T_AuxiliarParameters)                      :: AuxParam
         type(T_BioChemParam      )                      :: BioChemParam
         type(T_ComputeOptions    )                      :: ComputeOptions
@@ -650,8 +659,13 @@ cd0 : if (ready_ .EQ. OFF_ERR_) then
             Me%PropIndex%AM                  = Me%Prop%IUB
             
             Me%Prop%IUB                      = Me%Prop%IUB + 1
-            Me%PropIndex%Oxygen              = Me%Prop%IUB
+            Me%PropIndex%NI                  = Me%Prop%IUB
             
+            Me%Prop%IUB                      = Me%Prop%IUB + 1
+            Me%PropIndex%NA                  = Me%Prop%IUB
+            
+            Me%Prop%IUB                      = Me%Prop%IUB + 1
+            Me%PropIndex%Oxygen              = Me%Prop%IUB          
             
         endif  
         
@@ -691,6 +705,8 @@ cd0 : if (ready_ .EQ. OFF_ERR_) then
         if(Me%ComputeOptions%BiologicalAlkalinity)   then
         Me%PropertyList(Me%PropIndex%ALK_cs_b )   = ALK_cs_b_
         Me%PropertyList(Me%PropIndex%AM       )   = Ammonia_
+        Me%PropertyList(Me%PropIndex%NI       )   = Nitrite_
+        Me%PropertyList(Me%PropIndex%NA       )   = Nitrate_
         Me%PropertyList(Me%PropIndex%Oxygen   )   = Oxygen_
         endif
         
@@ -940,6 +956,7 @@ if1 :   if ((ready_ .EQ. IDLE_ERR_     ) .OR.                                 &
                                      Latitude,                                   &
                                      Longitude,                                  &
                                      Ratios,                                     &
+                                     VolumenZ,                                   &
                                      Rate_Nitrif1,                               &
                                      Rate_Nitrif2,                               &
                                      Rate_Denit,                                 &
@@ -954,6 +971,7 @@ if1 :   if ((ready_ .EQ. IDLE_ERR_     ) .OR.                                 &
       real,               pointer, intent(IN), dimension(:  )   :: Latitude
       real,               pointer, intent(IN), dimension(:  )   :: Longitude
       real,   optional,   pointer, intent(IN), dimension(:  )   :: Ratios
+      real,   optional,   pointer, intent(IN), dimension(:  )   :: VolumenZ
       real,   optional,   pointer, intent(IN), dimension(:  )   :: Rate_Nitrif1
       real,   optional,   pointer, intent(IN), dimension(:  )   :: Rate_Nitrif2
       real,   optional,   pointer, intent(IN), dimension(:  )   :: Rate_Denit
@@ -992,11 +1010,14 @@ if1 :   if ((ready_ .EQ. IDLE_ERR_     ) .OR.                                 &
             if (.NOT. associated(Me%ExternalVar%Longitude))           &
                stop 'Subroutine ModifyCarbonateSystem - ModuleCarbonateSystem. ERR07'
             
-            if(present(Ratios) .and. present(Rate_Nitrif1) .and. present(Rate_Nitrif2)  & 
-               .and. present(Rate_Denit)) then                 
+            if(present(Ratios)) then !.and. present(Rate_Nitrif1) .and. present(Rate_Nitrif2)  & 
+               !.and. present(Rate_Denit)) then                 
             Me%ExternalVar%Ratios                     => Ratios
-                if (.NOT. associated(Me%ExternalVar%Longitude))               &
+                if (.NOT. associated(Me%ExternalVar%Ratios))               &
                stop 'Subroutine ModifyCarbonateSystem - ModuleCarbonateSystem. ERR08'
+            Me%ExternalVar%VolumenZ                   => VolumenZ
+                if (.NOT. associated(Me%ExternalVar%VolumenZ))               &
+               stop 'Subroutine ModifyCarbonateSystem - ModuleCarbonateSystem. ERR08b'
             Me%ExternalVar%Nitrification1              => Rate_Nitrif1
                 if (.NOT. associated(Me%ExternalVar%Nitrification1))          &
                stop 'Subroutine ModifyCarbonateSystem - ModuleCarbonateSystem. ERR09'
@@ -1008,8 +1029,7 @@ if1 :   if ((ready_ .EQ. IDLE_ERR_     ) .OR.                                 &
                stop 'Subroutine ModifyCarbonateSystem - ModuleCarbonateSystem. ERR11'
             endif
             
-            
-           
+                       
             !Associates array dimension (external) to array dimension variable of this module(Me%Array%) 
             Me%Array%ILB = ArraySize%ILB
             Me%Array%IUB = ArraySize%IUB
@@ -1067,20 +1087,25 @@ d1:         do index = Me%Array%ILB, Me%Array%IUB
  subroutine Biogeochemical_ratios_and_parameters
  !-------------------------------------------------------------------------
 
-   Me%ExternalRatio%Diatm_are_calculated   = Me%ExternalVar%Ratios(1)  
-   Me%ExternalRatio%NC_phyto               = Me%ExternalVar%Ratios(2)  
-   Me%ExternalRatio%PC_phyto               = Me%ExternalVar%Ratios(3)  
-   Me%ExternalRatio%NC_zoo                 = Me%ExternalVar%Ratios(4)  
-   Me%ExternalRatio%PC_zoo                 = Me%ExternalVar%Ratios(5)   
-   Me%ExternalParam%MinOxygen              = Me%ExternalVar%Ratios(6)
-   Me%ExternalParam%TNitrification         = Me%ExternalVar%Ratios(7)
-   Me%ExternalParam%NitrificationSatConst  = Me%ExternalVar%Ratios(8)
-   Me%ExternalParam%KNitrificationRateK1   = Me%ExternalVar%Ratios(9)
-   Me%ExternalParam%KNitrificationRateK2   = Me%ExternalVar%Ratios(10)
-   
+   Me%ExternalRatio%Diatm_are_calculated    = Me%ExternalVar%Ratios(1) 
+   Me%ExternalParam%pelagic_module_dt       = Me%ExternalVar%Ratios(2) 
+   Me%ExternalParam%pelagic_module_dt_day   = Me%ExternalVar%Ratios(3)    
+   Me%ExternalRatio%NC_phyto                = Me%ExternalVar%Ratios(4)  
+   Me%ExternalRatio%PC_phyto                = Me%ExternalVar%Ratios(5)  
+   Me%ExternalRatio%NC_zoo                  = Me%ExternalVar%Ratios(6)  
+   Me%ExternalRatio%PC_zoo                  = Me%ExternalVar%Ratios(7)   
+   Me%ExternalParam%MinOxygen               = Me%ExternalVar%Ratios(8)
+   Me%ExternalParam%TNitrification          = Me%ExternalVar%Ratios(9)
+   Me%ExternalParam%NitrificationSatConst   = Me%ExternalVar%Ratios(10)
+   Me%ExternalParam%KNitrificationRateK1    = Me%ExternalVar%Ratios(11)
+   Me%ExternalParam%KNitrificationRateK2    = Me%ExternalVar%Ratios(12)
+   Me%ExternalParam%KDenitrificationRate    = Me%ExternalVar%Ratios(13)
+   Me%ExternalParam%TDenitrification        = Me%ExternalVar%Ratios(14)
+   Me%ExternalParam%DenitrificationSatConst = Me%ExternalVar%Ratios(15)
+
    if(Me%ExternalRatio%Diatm_are_calculated == 1) then   
-   Me%ExternalRatio%NC_diatm               = Me%ExternalVar%Ratios(11)  
-   Me%ExternalRatio%PC_diatm               = Me%ExternalVar%Ratios(12)   
+   Me%ExternalRatio%NC_diatm                = Me%ExternalVar%Ratios(16)  
+   Me%ExternalRatio%PC_diatm                = Me%ExternalVar%Ratios(17)   
    endif
    
  !----------------------------------------------------------------------------
@@ -1294,8 +1319,7 @@ i3:     if (temp > 20.) then
  subroutine ComputeAlkalinity_bio(index)
  
    !Arguments-----------------------------------------------------------------
-     integer, intent(IN) :: index   
-     
+     integer, intent(IN) :: index  
    !Local--------------------------------------------------------------------   
      real           :: Nitrif1       !Nitrif1 
      real           :: Nitrif2       !Nitrif2 
@@ -1308,57 +1332,17 @@ i3:     if (temp > 20.) then
      real           :: yP_d          !Diatoms P/C stoichometry ratio used in pelagic module
      real           :: yN_z          !Zooplankton N/C stoichometry ratio used in pelagic module
      real           :: yP_z          !Zooplankton P/C stoichometry ratio used in pelagic module
-     
-     real           :: Nitrif1_RAMIRO
-     real           :: x5
-     real           :: NitrificationRateK1
-     real           :: NitrificationRateK2
-     real           :: DTDay
-     
-     integer        :: O
    !----------------------------------------------------------------------------------------------    
-        yN_p = Me%ExternalRatio%NC_phyto    
-        yP_p = Me%ExternalRatio%PC_phyto
-        yN_d = Me%ExternalRatio%NC_diatm
-        yP_d = Me%ExternalRatio%PC_diatm
-        yN_z = Me%ExternalRatio%NC_zoo
-        yP_z = Me%ExternalRatio%PC_zoo 
-        O    = Me%PropIndex%Oxygen
-    !------------------------------------------------------------------------------------------------    
-    !Rates are mass rates in mg/seconds (mg/WQDT_seconds). Conversion to moles (i.e. amount of moles 
-    !prod/retired within the time step, in seconds).Cuanto se ha creado/destruido en cada instante temporal (contabilizado en segundos) 
-     ![mmolesN]                    [mgN/dtsec]       /     [mgN/mmolN]                        
-     Nitrif1 = Me%ExternalVar%Nitrification1 (index) / Me%AuxParam%N_AtomicMass      
-     Nitrif2 = Me%ExternalVar%Nitrification2 (index) / Me%AuxParam%N_AtomicMass
-     Denit   = Me%ExternalVar%Denitrification(index) / Me%AuxParam%N_AtomicMass
-      
-     ![umolesN] = [mmolesN] * 10^3 
-     Denit      = -Denit   / 0.001  !With a minus, to convert the values of nitrate retired (in negative) to positive
-     Nitrif1    = -Nitrif1 / 0.001  !With a minus, to convert the values of ammonia retired (in negative) to positive
-     Nitrif2    =  Nitrif2 / 0.001   
-     
-        
-     !PROPUESTA DE RAMIRO   
-      
-      x5 = MAX(Me%ExternalVar%Mass(O, index),Me%ExternalParam%MinOxygen)                                     &
-           /(Me%ExternalParam%NitrificationSatConst + Me%ExternalVar%Mass(O, index))
-
-      NitrificationRateK1 = Me%ExternalParam%KNitrificationRateK1 * Me%ExternalParam%TNitrification          &
-                             **(Me%ExternalVar%Temperature(index) - 20.0) * x5
-     
-      NitrificationRateK2 = Me%ExternalParam%KNitrificationRateK2 * Me%ExternalParam%TNitrification          &
-                            **(Me%ExternalVar%Temperature(index) - 20.0) * x5
-                
-      DTDay = 0.0417  
-      Nitrif1_RAMIRO = NitrificationRateK1 * DTDay * Me%ExternalVar%Mass(Me%PropIndex%AM,Index)  
-      Nitrif1_RAMIRO = Nitrif1_RAMIRO / 3600. 
-      Nitrif1_RAMIRO = Nitrif1_RAMIRO / Me%AuxParam%N_AtomicMass
-      Nitrif1_RAMIRO = Nitrif1_RAMIRO / 0.001
-      
-      
-      
-      
-      
+     yN_p = Me%ExternalRatio%NC_phyto    
+     yP_p = Me%ExternalRatio%PC_phyto
+     yN_d = Me%ExternalRatio%NC_diatm
+     yP_d = Me%ExternalRatio%PC_diatm
+     yN_z = Me%ExternalRatio%NC_zoo
+     yP_z = Me%ExternalRatio%PC_zoo    
+   !------------------------------------------------------------------------------------------------    
+          
+   call Compute_biogeochem_rates_for_alk_bio(index, Nitrif1, Nitrif2, Denit)  
+            
      
  i1:  IF (Me%ComputeOptions%DIC_calcification) THEN                        !Calculate changes in alk including calcite prec/dis  
      
@@ -1440,6 +1424,99 @@ i3:     if (temp > 20.) then
 
  
  
+ !>@author Marta López, Maretec
+ !>@Brief: Calculate several biogeochemical rates for each grid cell, in every
+ !>time step
+ !>@param[in] index
+ !>@param[out] nitrification1, nitrification2, denitrification
+ !::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::: 
+ 
+ subroutine Compute_biogeochem_rates_for_alk_bio(index, nitrification1, &
+                                                        nitrification2, &
+                                                        denitrification )
+ ! Arguments -----------------------------------------------------------------
+     integer, intent(IN )  :: index 
+     real   , intent(OUT)  :: nitrification1
+     real   , intent(OUT)  :: nitrification2
+     real   , intent(OUT)  :: denitrification    
+     
+ ! Local ---------------------------------------------------------------------
+     real           :: Nitrif1_RAMIRO
+     real           :: Nitrif2_RAMIRO
+     real           :: Denitri_RAMIRO
+     real           :: x5
+     real           :: x1
+     real           :: NitrificationRateK1
+     real           :: NitrificationRateK2
+     real           :: DenitrificationRate
+     real           :: Pelagic_module_DTDay 
+     real           :: Pelagic_module_DT
+     integer        :: O
+ !--------------------------------------------------------------------------       
+     Pelagic_module_DTDay = Me%ExternalParam%pelagic_module_dt_day
+     Pelagic_module_DT    = Me%ExternalParam%pelagic_module_dt
+                    O     = Me%PropIndex%Oxygen
+ !--------------------------------------------------------------------------  
+                  
+ !Rates are mass rates in mg/seconds (mg/WQDT_seconds). Conversion to moles (i.e. amount of moles 
+ !prod/retired within the time step, in seconds).Cuanto se ha creado/destruido en cada instante temporal (contabilizado en segundos)
+     
+     ![mmolesN]                    [mgN/dtsec]                /     [mgN/mmolN]                        
+     nitrification1   = Me%ExternalVar%Nitrification1 (index) / Me%AuxParam%N_AtomicMass      
+     nitrification2   = Me%ExternalVar%Nitrification2 (index) / Me%AuxParam%N_AtomicMass
+     denitrification  = Me%ExternalVar%Denitrification(index) / Me%AuxParam%N_AtomicMass
+      
+     ![umolesN]        =    [mmolesN]   * 10^3 
+     denitrification   = -denitrification / 0.001  !With a minus, to convert the values of nitrate retired (in negative) to positive
+     nitrification1    = -nitrification1  / 0.001  !With a minus, to convert the values of ammonia retired (in negative) to positive
+     nitrification2    =  nitrification2  / 0.001   
+          
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!   
+
+     
+     !NITRIFICATION and DENITRIFICATION (based on WaterQuality)
+     
+      x5 = MAX(Me%ExternalVar%Mass(O, index),Me%ExternalParam%MinOxygen)                                 &
+           /(Me%ExternalParam%NitrificationSatConst + Me%ExternalVar%Mass(O, index))
+      
+      x1 = Me%ExternalParam%DenitrificationSatConst / (Me%ExternalParam%DenitrificationSatConst          &
+                                        + MAX(Me%ExternalVar%Mass(O, index),Me%ExternalParam%MinOxygen))
+      
+            
+      NitrificationRateK1 = Me%ExternalParam%KNitrificationRateK1 * Me%ExternalParam%TNitrification      &
+                            **(Me%ExternalVar%Temperature(index) - 20.0) * x5
+     
+      NitrificationRateK2 = Me%ExternalParam%KNitrificationRateK2 * Me%ExternalParam%TNitrification      &
+                            **(Me%ExternalVar%Temperature(index) - 20.0) * x5    
+      
+      DenitrificationRate = Me%ExternalParam%KDenitrificationRate * Me%ExternalParam%TDenitrification    &
+                            ** (Me%ExternalVar%Temperature(index) - 20.) * x1               
+      
+      
+      !  [mgN/l]     =            DtDay        *      1/Days         *          [mgN/l] 
+      Nitrif1_RAMIRO = NitrificationRateK1 * Pelagic_module_DTDay * Me%ExternalVar%Mass(Me%PropIndex%AM,Index)
+      Nitrif2_RAMIRO = NitrificationRateK2 * Pelagic_module_DTDay * Me%ExternalVar%Mass(Me%PropIndex%NI,Index)
+      Denitri_RAMIRO = DenitrificationRate * Pelagic_module_DTDay * Me%ExternalVar%Mass(Me%PropIndex%NA,Index)
+      
+      ![mgN/dt]      =     [mgN/l]   *      [l/cell]                  /        [dt] 
+      Nitrif1_RAMIRO = Nitrif1_RAMIRO * Me%ExternalVar%VolumenZ(index) / Pelagic_module_DT
+      Nitrif2_RAMIRO = Nitrif2_RAMIRO * Me%ExternalVar%VolumenZ(index) / Pelagic_module_DT
+      Denitri_RAMIRO = Denitri_RAMIRO * Me%ExternalVar%VolumenZ(index) / Pelagic_module_DT    
+            
+      ![mmolesN/dt]  =   [mgN/dt]     /     [mgN/mmolN]          
+      Nitrif1_RAMIRO = Nitrif1_RAMIRO / Me%AuxParam%N_AtomicMass
+      Nitrif2_RAMIRO = Nitrif2_RAMIRO / Me%AuxParam%N_AtomicMass
+      Denitri_RAMIRO = Denitri_RAMIRO / Me%AuxParam%N_AtomicMass
+      
+      ![umolesN/dt]  = [mmolesN/dt]   *  10^3
+      Nitrif1_RAMIRO = Nitrif1_RAMIRO / 0.001
+      Nitrif2_RAMIRO = Nitrif2_RAMIRO / 0.001
+      Denitri_RAMIRO = Denitri_RAMIRO / 0.001
+      
+ !----------------------------------------------------------------------------
+ end subroutine Compute_biogeochem_rates_for_alk_bio
+ !::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+   
  
 
 

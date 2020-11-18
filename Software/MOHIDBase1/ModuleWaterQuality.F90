@@ -4022,16 +4022,6 @@ cd1 :   if (Me%CalcMethod%ExplicitMethod) then
                 stop 'Subroutine AllocateVariables - ModuleWaterQuality. ERR01.'
         end if cd1
 
-cd2 :   if (Me%PropCalc%Diatoms) then            
-           allocate(Me%Param_forCS(1:12),STAT = STAT_CALL)
-           if (STAT_CALL .NE. SUCCESS_)                                        &
-                stop 'Subroutine AllocateVariables - ModuleWaterQuality. ERR02.'           
-        else            
-           allocate(Me%Param_forCS(1:10),STAT = STAT_CALL)
-           if (STAT_CALL .NE. SUCCESS_)                                        &
-                stop 'Subroutine AllocateVariables - ModuleWaterQuality. ERR03.'
-       end if cd2
-    
 
         !------------------------------------------------------------------------
 
@@ -4096,7 +4086,7 @@ cd1 : if ((ready_ .EQ. IDLE_ERR_     ) .OR.                                 &
     
    !>@author Marta López, Maretec
    !>@Brief: Stores in 1D array several parameters, red in WaterQuality.dat, to 
-   !> later provide them to CarbonateSystemModule
+   !> later pass the info to CarbonateSystemModule
     
     subroutine GetWQparameters(WaterQualityID, List, STAT)
     !Arguments-------------------------------------------------------------
@@ -4104,43 +4094,65 @@ cd1 : if ((ready_ .EQ. IDLE_ERR_     ) .OR.                                 &
         real, pointer, dimension(:)               :: List  
         integer, optional, intent(OUT)            :: STAT    
         !External--------------------------------------------------------------
-        integer                         :: ready_
+        integer                         :: ready_        
         !Local-----------------------------------------------------------------
         integer                         :: STAT_
+        integer                         :: STAT_CALL
         !----------------------------------------------------------------------
 
         STAT_ = UNKNOWN_
 
         call Ready(WaterQualityID, ready_)
 
-cd1 : if ((ready_ .EQ. IDLE_ERR_     ) .OR.                                 &
-           (ready_ .EQ. READ_LOCK_ERR_)) then
+cd1 : if ((ready_ .EQ. IDLE_ERR_     ) .OR.                                    &
+           (ready_ .EQ. READ_LOCK_ERR_)) then    
+    
+    cd2 :  if (Me%PropCalc%Diatoms) then            
+              allocate(Me%Param_forCS(1:17),STAT = STAT_CALL)
+              if (STAT_CALL .NE. SUCCESS_)                                     &
+                stop 'Subroutine GetWQparameters - ModuleWaterQuality. ERR01.'           
+           else            
+              allocate(Me%Param_forCS(1:15),STAT = STAT_CALL)
+              if (STAT_CALL .NE. SUCCESS_)                                     &
+                stop 'Subroutine GetWQparameters - ModuleWaterQuality. ERR02.'
+           end if cd2
+    
     
            Me%Param_forCS(:) = 0.0   !Array initialization
                 if (Me%PropCalc%Diatoms) then   
-                    Me%Param_forCS(1)  = 1.           !Diatoms are activated
-                    Me%Param_forCS(2)  = Me%AlfaPhytoNC
-                    Me%Param_forCS(3)  = Me%AlfaPhytoPC
-                    Me%Param_forCS(4)  = Me%AlfaZooNC  
-                    Me%Param_forCS(5)  = Me%AlfaZooPC                    
-                    Me%Param_forCS(6)  = Me%MinOxygen
-                    Me%Param_forCS(7)  = Me%TNitrification
-                    Me%Param_forCS(8)  = Me%NitrificationSatConst
-                    Me%Param_forCS(9)  = Me%KNitrificationRateK1
-                    Me%Param_forCS(10) = Me%KNitrificationRateK2                  
-                    Me%Param_forCS(11) = Me%Diatoms%DiaAlfaNC
-                    Me%Param_forCS(12) = Me%Diatoms%DiaAlfaPC    
+                    Me%Param_forCS(1)  = 1.       !Diatoms are activated
+                    Me%Param_forCS(2)  = Me%DTSecond
+                    Me%Param_forCS(3)  = Me%DTDay                    
+                    Me%Param_forCS(4)  = Me%AlfaPhytoNC
+                    Me%Param_forCS(5)  = Me%AlfaPhytoPC
+                    Me%Param_forCS(6)  = Me%AlfaZooNC  
+                    Me%Param_forCS(7)  = Me%AlfaZooPC                    
+                    Me%Param_forCS(8)  = Me%MinOxygen
+                    Me%Param_forCS(9)  = Me%TNitrification
+                    Me%Param_forCS(10) = Me%NitrificationSatConst
+                    Me%Param_forCS(11) = Me%KNitrificationRateK1
+                    Me%Param_forCS(12) = Me%KNitrificationRateK2 
+                    Me%Param_forCS(13) = Me%KDenitrificationRate
+                    Me%Param_forCS(14) = Me%TDenitrification
+                    Me%Param_forCS(15) = Me%DenitrificationSatConst 
+                    Me%Param_forCS(16) = Me%Diatoms%DiaAlfaNC
+                    Me%Param_forCS(17) = Me%Diatoms%DiaAlfaPC    
                 else  
                     Me%Param_forCS(1)  = 0. !Key value to pass to carbonate system module to know if diatoms are calculated
-                    Me%Param_forCS(2)  = Me%AlfaPhytoNC
-                    Me%Param_forCS(3)  = Me%AlfaPhytoPC
-                    Me%Param_forCS(4)  = Me%AlfaZooNC  
-                    Me%Param_forCS(5)  = Me%AlfaZooPC                    
-                    Me%Param_forCS(6)  = Me%MinOxygen
-                    Me%Param_forCS(7)  = Me%TNitrification
-                    Me%Param_forCS(8)  = Me%NitrificationSatConst
-                    Me%Param_forCS(9)  = Me%KNitrificationRateK1
-                    Me%Param_forCS(10) = Me%KNitrificationRateK2 
+                    Me%Param_forCS(2)  = Me%DTSecond
+                    Me%Param_forCS(3)  = Me%DTDay                    
+                    Me%Param_forCS(4)  = Me%AlfaPhytoNC
+                    Me%Param_forCS(5)  = Me%AlfaPhytoPC
+                    Me%Param_forCS(6)  = Me%AlfaZooNC  
+                    Me%Param_forCS(7)  = Me%AlfaZooPC                    
+                    Me%Param_forCS(8)  = Me%MinOxygen
+                    Me%Param_forCS(9)  = Me%TNitrification
+                    Me%Param_forCS(10) = Me%NitrificationSatConst
+                    Me%Param_forCS(11) = Me%KNitrificationRateK1
+                    Me%Param_forCS(12) = Me%KNitrificationRateK2 
+                    Me%Param_forCS(13) = Me%KDenitrificationRate
+                    Me%Param_forCS(14) = Me%TDenitrification
+                    Me%Param_forCS(15) = Me%DenitrificationSatConst 
                 endif 
            List => Me%Param_forCS  
            if (.not. associated(List)) stop 'ModuleWaterQuality-GetWQparameters- ERROR 01'
@@ -4514,7 +4526,7 @@ do1 :   do while(associated(EquaRateFluxX))
           if (.NOT.found) then
                     if (FirstProp.eq. Me%GrossProduction%ID) then
                         PropRateFlux => Me%GrossProduction%Field
-                        !write(*,*)'grossprod = ', PropRateFlux
+                        !write(*,*)'grossprod = ', PropRateFlux marta
                         found=.TRUE.
                     elseif (FirstProp.eq. Me%TempLimitation%ID) then
                         PropRateFlux => Me%TempLimitation%Field
@@ -8312,10 +8324,11 @@ subroutine WQNitrate(index, NitrificationRateK2)
 
         DenitrificationRate = Me%KDenitrificationRate * Me%TDenitrification                         &
                             ** (Me%ExternalVar%Temperature(index) - 20.) * x1
-
-       !write(*,*) 'DenitRate = ',DenitrificationRate !marta
+       
     !BOD not consumed due to anaerobic organic matter decomposition during Denitrification
-        !aqui_6 5/4 não percebi...acho que não existe libertação de O2 com a desnitrificação 
+        !aqui_6 5/4 não percebi...acho que não existe libertação de O2 com a desnitrificação
+     !@marta: I also think denitrification does not liberate oxygen.Several gaseous nitrogen oxides are  
+     !produced as intermediate products, but not as a final products (N2, CO2, H20, NH3 and H3PO4)
         if (Me%PropCalc%Oxygen)                                                                     &
             ODsourceDenitrificationRate = 5.0 / 4.0 * Me%NConsOxyNitRatio                           &
                                                     * DenitrificationRate
@@ -9096,11 +9109,12 @@ cd4 :           if (associated(Me%NewMass)) then
                 end if cd4
 
 
-               deallocate(Me%Param_forCS, STAT = STAT_CALL)
-                if (STAT_CALL .NE. SUCCESS_)                                    &
-                    stop 'Subroutine Kill_WaterQuality - ModuleWaterQuality. ERR05.'
-                nullify(Me%Param_forCS)
-
+               if (associated(Me%Param_forCS)) then
+                   deallocate(Me%Param_forCS, STAT = STAT_CALL)
+                   if (STAT_CALL .NE. SUCCESS_)                                 &
+                     stop 'Subroutine Kill_WaterQuality - ModuleWaterQuality. ERR05.'
+                   nullify(Me%Param_forCS)
+              end if
 
                 call DeallocateInstance
 
