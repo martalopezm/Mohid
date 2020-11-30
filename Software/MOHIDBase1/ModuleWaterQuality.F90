@@ -4115,12 +4115,11 @@ cd1 : if ((ready_ .EQ. IDLE_ERR_     ) .OR.                                    &
               allocate(Me%Param_forCS(1:15),STAT = STAT_CALL)
               if (STAT_CALL .NE. SUCCESS_)                                     &
                 stop 'Subroutine GetWQparameters - ModuleWaterQuality. ERR02.'
-           end if cd2
-    
+           end if cd2  
     
            Me%Param_forCS(:) = 0.0   !Array initialization
-                if (Me%PropCalc%Diatoms) then   
-                    Me%Param_forCS(1)  = 1.       !Diatoms are activated
+           
+                    Me%Param_forCS(1)  = 0.       !Diatoms are not activated
                     Me%Param_forCS(2)  = Me%DTSecond
                     Me%Param_forCS(3)  = Me%DTDay                    
                     Me%Param_forCS(4)  = Me%AlfaPhytoNC
@@ -4134,26 +4133,14 @@ cd1 : if ((ready_ .EQ. IDLE_ERR_     ) .OR.                                    &
                     Me%Param_forCS(12) = Me%KNitrificationRateK2 
                     Me%Param_forCS(13) = Me%KDenitrificationRate
                     Me%Param_forCS(14) = Me%TDenitrification
-                    Me%Param_forCS(15) = Me%DenitrificationSatConst 
+                    Me%Param_forCS(15) = Me%DenitrificationSatConst                   
+                    
+               if (Me%PropCalc%Diatoms) then    
+                    Me%Param_forCS(1)  = 1. !Key value to pass to carbonate system module to know if diatoms are calculated
                     Me%Param_forCS(16) = Me%Diatoms%DiaAlfaNC
-                    Me%Param_forCS(17) = Me%Diatoms%DiaAlfaPC    
-                else  
-                    Me%Param_forCS(1)  = 0. !Key value to pass to carbonate system module to know if diatoms are calculated
-                    Me%Param_forCS(2)  = Me%DTSecond
-                    Me%Param_forCS(3)  = Me%DTDay                    
-                    Me%Param_forCS(4)  = Me%AlfaPhytoNC
-                    Me%Param_forCS(5)  = Me%AlfaPhytoPC
-                    Me%Param_forCS(6)  = Me%AlfaZooNC  
-                    Me%Param_forCS(7)  = Me%AlfaZooPC                    
-                    Me%Param_forCS(8)  = Me%MinOxygen
-                    Me%Param_forCS(9)  = Me%TNitrification
-                    Me%Param_forCS(10) = Me%NitrificationSatConst
-                    Me%Param_forCS(11) = Me%KNitrificationRateK1
-                    Me%Param_forCS(12) = Me%KNitrificationRateK2 
-                    Me%Param_forCS(13) = Me%KDenitrificationRate
-                    Me%Param_forCS(14) = Me%TDenitrification
-                    Me%Param_forCS(15) = Me%DenitrificationSatConst 
-                endif 
+                    Me%Param_forCS(17) = Me%Diatoms%DiaAlfaPC                  
+               endif 
+               
            List => Me%Param_forCS  
            if (.not. associated(List)) stop 'ModuleWaterQuality-GetWQparameters- ERROR 01'
           
