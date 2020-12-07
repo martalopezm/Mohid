@@ -7253,6 +7253,8 @@ cd1 :   if ((Property == Temperature_           ) .OR.  (Property == Salinity_  
             (Property == DissolvedMetal_        ) .OR.  (Property == DissolvedCopper_       ) .OR.          &
             (Property == DissolvedCadmium_      ) .OR.  (Property == DissolvedLead_         ) .OR.          &
             (Property == DissolvedMercury_      ) .OR.  (Property == DissolvedZinc_         ) .OR.          &
+            (Property == ALK_cs_p_              ) .OR.  (Property == ALK_cs_b_              ) .OR.          &
+            (Property == DIC_cs_nc_             ) .OR.  (Property == DIC_cs_c_              ) .OR.          &
             (Property == FloatingObject_        )  ) then
 
             Check_Water_Property = .TRUE.

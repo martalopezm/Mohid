@@ -70,7 +70,8 @@ Module ModuleWaterQuality
     public  :: UnGetWQPropRateFlux              
                   
     public  :: GetNCRatio 
-    public  :: GetWQparameters 
+    public  :: GetWQparameters
+    public  :: GetWQGrossGrowthRate
                   
     !Modifier
     public  :: WaterQuality            
@@ -933,7 +934,7 @@ do2:        do while (associated(EquaRateFluxX))
      
     !>@author: Modified by Marta López, Maretec
     !>@Brief:If Phytoplankton property calculation is activated, gross production
-    !> and growth limitations parameter output are available, among others. 
+    !> and growth limitations output are available, among others. 
     !> This subroutine allocates the extra rates, verifies the name is correct and
     !> allocates and initializates its array (Me%Phytoplankton%NameExtraRate%Field) 
     !> to store the values of the extrarate
@@ -1018,7 +1019,7 @@ do2:        do while (associated(EquaRateFluxX))
     
     !>@author: Modified by Marta López, Maretec
     !>@Brief:If Diatoms property calculation is activated, gross production
-    !> and growth limitations parameter output are available, among others. 
+    !> and growth limitations output are available, among others. 
     !> This subroutine allocates the extra rates, verifies the name is correct and
     !> allocates and initializates its array (Me%Diatoms%NameExtraRate%Field) 
     !> to store the values of the extrarate
@@ -4136,7 +4137,7 @@ cd1 : if ((ready_ .EQ. IDLE_ERR_     ) .OR.                                    &
                     Me%Param_forCS(15) = Me%DenitrificationSatConst                   
                     
                if (Me%PropCalc%Diatoms) then    
-                    Me%Param_forCS(1)  = 1. !Key value to pass to carbonate system module to know if diatoms are calculated
+                    Me%Param_forCS(1)  = 1. !Key value to pass to CS module to know if diatoms are calculated
                     Me%Param_forCS(16) = Me%Diatoms%DiaAlfaNC
                     Me%Param_forCS(17) = Me%Diatoms%DiaAlfaPC                  
                endif 
@@ -4157,6 +4158,79 @@ cd1 : if ((ready_ .EQ. IDLE_ERR_     ) .OR.                                    &
 
     !--------------------------------------------------------------------------
     
+    
+    !>@author Marta López, Maretec
+   !>@Brief: Stores in 1D array GrossGrowthRate, to 
+   !> later pass the info to CarbonateSystemModule
+    
+    subroutine GetWQGrossGrowthRate(WaterQualityID, GGR, STAT)
+    !Arguments-------------------------------------------------------------
+        integer                                   :: WaterQualityID
+        real, pointer, dimension(:)               :: GGR  
+        integer, optional, intent(OUT)            :: STAT    
+        !External--------------------------------------------------------------
+        integer                         :: ready_        
+        !Local-----------------------------------------------------------------
+        integer                         :: STAT_
+        integer                         :: STAT_CALL
+        !----------------------------------------------------------------------
+
+        STAT_ = UNKNOWN_
+
+        call Ready(WaterQualityID, ready_)
+
+cd1 : if ((ready_ .EQ. IDLE_ERR_     ) .OR.                                    &
+           (ready_ .EQ. READ_LOCK_ERR_)) then    
+    
+    cd2 :  if (Me%PropCalc%Diatoms) then            
+              allocate(Me%Param_forCS(1:17),STAT = STAT_CALL)
+              if (STAT_CALL .NE. SUCCESS_)                                     &
+                stop 'Subroutine GetWQparameters - ModuleWaterQuality. ERR01.'           
+           else            
+              allocate(Me%Param_forCS(1:15),STAT = STAT_CALL)
+              if (STAT_CALL .NE. SUCCESS_)                                     &
+                stop 'Subroutine GetWQparameters - ModuleWaterQuality. ERR02.'
+           end if cd2  
+    
+           Me%Param_forCS(:) = 0.0   !Array initialization
+           
+                    Me%Param_forCS(1)  = 0.       !Diatoms are not activated
+                    Me%Param_forCS(2)  = Me%DTSecond
+                    Me%Param_forCS(3)  = Me%DTDay                    
+                    Me%Param_forCS(4)  = Me%AlfaPhytoNC
+                    Me%Param_forCS(5)  = Me%AlfaPhytoPC
+                    Me%Param_forCS(6)  = Me%AlfaZooNC  
+                    Me%Param_forCS(7)  = Me%AlfaZooPC                    
+                    Me%Param_forCS(8)  = Me%MinOxygen
+                    Me%Param_forCS(9)  = Me%TNitrification
+                    Me%Param_forCS(10) = Me%NitrificationSatConst
+                    Me%Param_forCS(11) = Me%KNitrificationRateK1
+                    Me%Param_forCS(12) = Me%KNitrificationRateK2 
+                    Me%Param_forCS(13) = Me%KDenitrificationRate
+                    Me%Param_forCS(14) = Me%TDenitrification
+                    Me%Param_forCS(15) = Me%DenitrificationSatConst                   
+                    
+               if (Me%PropCalc%Diatoms) then    
+                    Me%Param_forCS(1)  = 1. !Key value to pass to CS module to know if diatoms are calculated
+                    Me%Param_forCS(16) = Me%Diatoms%DiaAlfaNC
+                    Me%Param_forCS(17) = Me%Diatoms%DiaAlfaPC                  
+               endif 
+               
+           List => Me%Param_forCS  
+           if (.not. associated(List)) stop 'ModuleWaterQuality-GetWQparameters- ERROR 01'
+          
+           STAT_ = SUCCESS_
+      else 
+            STAT_ = ready_
+      end if cd1
+        
+       if (present(STAT))STAT = STAT_
+
+    !----------------------------------------------------------------------
+
+    end subroutine GetWQGrossGrowthRate
+
+    !--------------------------------------------------------------------------
     
 
     subroutine GetWaterQualitySize(WaterQualityID, PropLB, PropUB, STAT)
@@ -5105,7 +5179,7 @@ cd3 :           if (equa .EQ. prop) then
                                       * Me%ExternalVar%Mass(prop, index))
 else cd3
 
-    Me%IndTerm(equa) =  Me%IndTerm         (equa      )                &
+                    Me%IndTerm(equa) =  Me%IndTerm         (equa      )                &
                                      -  Me%Matrix          (equa, prop)                &
                                      *  Me%ExternalVar%Mass(prop, index)
                 end if cd3
@@ -5220,8 +5294,7 @@ cd0:    if (Me%PropCalc%Phyto) then
                                           * Me%PhytoLightLimitationFactor                        &
                                           * Me%PhytoNutrientsLimitationFactor                    &
                                           * Me%ExternalVar%Mass(Phyto,index)                     &
-                                          * DTSec
-           !write(*,*)'grossproductionphyto =', Me%GrossProduction%field(index)        !marta                 
+                                          * DTSec               
                          
 
            Me%NutLimitation%field(index)  = Me%PhytoNutrientsLimitationFactor * DTSec
@@ -5241,7 +5314,7 @@ cd0:    if (Me%PropCalc%Phyto) then
                                                      * Me%Diatoms%DiaNutrientsLimitationFactor   &
                                                      * Me%ExternalVar%Mass(Diatoms,index)        &
                                                      * DTSec
-           !write(*,*)'grossproductiondiat =', Me%Diatoms%DiaGrossProduction%field(index)        !marta                    
+                               
            Me%Diatoms%DiaNutLimitation%field(index)  = Me%Diatoms%DiaNutrientsLimitationFactor * DTSec
            Me%Diatoms%DiaNLimitation%field(index)    = Me%Diatoms%DiaNLimitationFactor         * DTSec
            Me%Diatoms%DiaPLimitation%field(index)    = Me%Diatoms%DiaPLimitationFactor         * DTSec
@@ -7328,7 +7401,9 @@ cd21 :  if     (Me%PhytoGrossGrowRate .LT. 0.0) then
             Me%PhytoGrossGrowRate = -1.0 / null_real
         endif
 
-
+    ! MARTA. Not a real mass, just a rate (d-1) 
+        !Me%ExternalVar%Mass(PhytoGrossGrowRate_, index) = Me%PhytoGrossGrowRate 
+         
     !PhytoAmmoniaPreferenceFactor
 cd22 :  if (Me%PropCalc%Nitrogen) then
           

@@ -275,6 +275,7 @@ Module ModuleGlobalData
     integer, parameter :: ALK_cs_b_                         = 2701
     integer, parameter :: DIC_cs_nc_                        = 2702
     integer, parameter :: DIC_cs_c_                         = 2703
+    integer, parameter :: PhytoGrossGrowRate_               = 2704   !marta borrar
 
     !Bivalve species
     integer, parameter :: Bivalve1_                         = 28
@@ -1151,6 +1152,7 @@ Module ModuleGlobalData
     character(StringLength), private, parameter :: Char_ALK_cs_b              = 'biological alkalinity CS'
     character(StringLength), private, parameter :: Char_DIC_cs_c              = 'dissolved inorganic carbon CS calc'
     character(StringLength), private, parameter :: Char_DIC_cs_nc             = 'dissolved inorganic carbon CS nocalc'
+    character(StringLength), private, parameter :: Char_PhytoGrossGrowRate    = 'phytoplankton gross grow rate'
 !___________________________________________________________________________________________________________________    
 
     !Name of Bivalve
@@ -2117,9 +2119,7 @@ Module ModuleGlobalData
         T_Module(mSediment_              , "Sediment"           ),   T_Module(mReservoirs_             , "Reservoirs"    ),        &
         T_Module(mIrrigation_            , "Irrigation"         ),   T_Module(mTURBINE_                , "Turbine"       ),        &
         T_Module(mLitter_                , "Litter"             ),   T_Module(mTwoWay_                 , "TwoWay"        ),        &
-        T_Module(mOutputGrid_            , "OuputGrid"          ),   T_Module(mCarbonateSystem_       ,  "CarbonateSystem"    )/)              
-
-
+        T_Module(mOutputGrid_            , "OuputGrid"          ),   T_Module(mCarbonateSystem_       ,  "CarbonateSystem"    )/)
 
 
     !Variables
@@ -2767,6 +2767,7 @@ do2:            do i=1, DynamicPropertiesNumber
             call AddPropList (ALK_cs_b_,                Char_ALK_cs_b,                  ListNumber) !mlopez
             call AddPropList (DIC_cs_c_,                Char_DIC_cs_c,                  ListNumber) !mlopez
             call AddPropList (DIC_cs_nc_,               Char_DIC_cs_nc,                 ListNumber) !mlopez
+            call AddPropList (PhytoGrossGrowRate_,      Char_PhytoGrossGrowRate,        ListNumber) !mlopez
             
             call AddPropList (Bivalve1_,                Char_Bivalve1,                  ListNumber) !soffs
             call AddPropList (Bivalve2_,                Char_Bivalve2,                  ListNumber)

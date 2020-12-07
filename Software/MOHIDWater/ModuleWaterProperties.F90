@@ -15918,6 +15918,7 @@ cd5:                if (TotalVolume > 0.) then
         !if activated, diatoms. Also, get several parameters stablished in WaterQuality.dat 
         if (Me%WQRate_for_CS%Alk_option == 1) then
            call GetWQParam(InterfaceID   = Me%ObjInterface, Ratios_and_Param_for_CS = RatiosList, STAT = STAT_CALL)
+           !call GetWQGrossGR(InterfaceID   = Me%ObjInterface, Ratios_and_Param_for_CS = RatiosList, STAT = STAT_CALL)
            if (STAT_CALL /= SUCCESS_) call CloseAllAndStop ('CarbonateSystem_Processes- ModuleWaterProperties - ERR00')
         endif
         

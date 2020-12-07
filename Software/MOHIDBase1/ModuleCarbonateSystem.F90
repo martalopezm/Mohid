@@ -254,10 +254,14 @@
         integer                         :: ALK_cs_b         = null_int   ! Alkalinity computed by biological changes 
         integer                         :: DIC_cs_c         = null_int   ! Dissolved inorganic carbon concentration (calcifi) 
         integer                         :: DIC_cs_nc        = null_int   ! Dissolved inorganic carbon concentration (no calc) 
-        integer                         :: AM               = null_int   ! External ammonia concentration
-        integer                         :: NI               = null_int   ! External nitrite concentration
-        integer                         :: NA               = null_int   ! External nitrate concentration
-        integer                         :: Oxygen           = null_int   ! External oxygen concentration
+        !integer                         :: AM               = null_int   ! External ammonia concentration
+        !integer                         :: NI               = null_int   ! External nitrite concentration
+        !integer                         :: NA               = null_int   ! External nitrate concentration
+        !integer                         :: Oxygen           = null_int   ! External oxygen concentration
+        !integer                         :: Phyto            = null_int   ! External phytoplank biomass 
+        !integer                         :: Zoo              = null_int   ! External zooplank biomass
+        !integer                         :: Diatoms          = null_int   ! External diatoms  biomass
+        !integer                         :: Ciliates         = null_int   ! External ciliates biomass        
     end type T_PropIndex       
       
     
@@ -295,7 +299,10 @@
         real            :: PC_zoo               = null_real
         real            :: NC_diatm             = null_real   
         real            :: PC_diatm             = null_real
-        integer         :: Diatm_are_calculated = null_int        
+        real            :: NC_cilia             = null_real   
+        real            :: PC_cilia             = null_real
+        integer         :: Diatm_are_calculated = null_int 
+        integer         :: Cilia_are_calculated = null_int 
     end type T_ExternalRatio  
     
     private ::  T_ExternalParameter                         
@@ -663,17 +670,23 @@ cd0 : if (ready_ .EQ. OFF_ERR_) then
             Me%Prop%IUB                      = Me%Prop%IUB + 1
             Me%PropIndex%ALK_cs_b            = Me%Prop%IUB
             
-            Me%Prop%IUB                      = Me%Prop%IUB + 1
-            Me%PropIndex%AM                  = Me%Prop%IUB
+            !Me%Prop%IUB                      = Me%Prop%IUB + 1
+            !Me%PropIndex%AM                  = Me%Prop%IUB
             
-            Me%Prop%IUB                      = Me%Prop%IUB + 1
-            Me%PropIndex%NI                  = Me%Prop%IUB
+           ! Me%Prop%IUB                      = Me%Prop%IUB + 1
+           ! Me%PropIndex%NI                  = Me%Prop%IUB
             
-            Me%Prop%IUB                      = Me%Prop%IUB + 1
-            Me%PropIndex%NA                  = Me%Prop%IUB
+           ! Me%Prop%IUB                      = Me%Prop%IUB + 1
+           ! Me%PropIndex%NA                  = Me%Prop%IUB
             
-            Me%Prop%IUB                      = Me%Prop%IUB + 1
-            Me%PropIndex%Oxygen              = Me%Prop%IUB          
+           ! Me%Prop%IUB                      = Me%Prop%IUB + 1
+           ! Me%PropIndex%Oxygen              = Me%Prop%IUB   
+            
+           ! Me%Prop%IUB                      = Me%Prop%IUB + 1
+           ! Me%PropIndex%Phyto               = Me%Prop%IUB
+            
+          !  Me%Prop%IUB                      = Me%Prop%IUB + 1
+          !  Me%PropIndex%Zoo                 = Me%Prop%IUB
             
         endif  
         
@@ -712,10 +725,12 @@ cd0 : if (ready_ .EQ. OFF_ERR_) then
         
         if(Me%ComputeOptions%BiologicalAlkalinity)   then
         Me%PropertyList(Me%PropIndex%ALK_cs_b )   = ALK_cs_b_
-        Me%PropertyList(Me%PropIndex%AM       )   = Ammonia_
-        Me%PropertyList(Me%PropIndex%NI       )   = Nitrite_
-        Me%PropertyList(Me%PropIndex%NA       )   = Nitrate_
-        Me%PropertyList(Me%PropIndex%Oxygen   )   = Oxygen_
+        !Me%PropertyList(Me%PropIndex%AM       )   = Ammonia_
+        !Me%PropertyList(Me%PropIndex%NI       )   = Nitrite_
+        !Me%PropertyList(Me%PropIndex%NA       )   = Nitrate_
+        !Me%PropertyList(Me%PropIndex%Oxygen   )   = Oxygen_
+        !Me%PropertyList(Me%PropIndex%Phyto    )   = Phytoplankton_
+        !Me%PropertyList(Me%PropIndex%Zoo      )   = Zooplankton_
         endif
         
         if(Me%ComputeOptions%DIC_no_calcification)   then
@@ -766,10 +781,6 @@ cd0 : if (ready_ .EQ. OFF_ERR_) then
    end subroutine  CS_configuration
   !::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
   
-   
-   
-   
-   
    
    
    
@@ -935,7 +946,7 @@ if1 :   if ((ready_ .EQ. IDLE_ERR_     ) .OR.                                 &
     !> @Brief: Compares the global property ID of all properties activated in 
     !> the water properties module with the global property ID of the PropertyList,
     !> this is, the properties that are going to be calculated in this module. 
-    !> This subroutine is called by module interface, 1est to fill variable mass of 
+    !> This subroutine is called by module interface,first to fill variable mass of 
     !> the properties this module will calculate, and 2nd to check consistence between
     !> module interface and carbonatesystem.
     !:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::    
@@ -1132,13 +1143,14 @@ d1:         do index = Me%Array%ILB, Me%Array%IUB
                                      
  !>@author Marta López, Maretec
  !>@Brief: Stores in individual variables the ratios and parameters contained in 
- !> Me%ExternalVar%Ratios 1D array  
+ !> Me%ExternalVar%Ratios 1D array. Depending on waterquality configuration, stores
+ !> Me%PelagicModuleConfiguration the WQ organism activated                                    
  !:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::      
  subroutine Biogeochemical_ratios_and_parameters
  !-------------------------------------------------------------------------
 
    Me%ExternalRatio%Diatm_are_calculated    = Me%ExternalVar%Ratios(1) 
-   !Me%ExternalRatio%Ciliates_are_calculated= Me%ExternalVar%Ratios(1) 
+   !Me%ExternalRatio%Cilia_are_calculated= Me%ExternalVar%Ratios(1) 
    Me%ExternalParam%pelagic_module_dt       = Me%ExternalVar%Ratios(2) 
    Me%ExternalParam%pelagic_module_dt_day   = Me%ExternalVar%Ratios(3)    
    Me%ExternalRatio%NC_phyto                = Me%ExternalVar%Ratios(4)  
@@ -1153,35 +1165,47 @@ d1:         do index = Me%Array%ILB, Me%Array%IUB
    Me%ExternalParam%KDenitrificationRate    = Me%ExternalVar%Ratios(13)
    Me%ExternalParam%TDenitrification        = Me%ExternalVar%Ratios(14)
    Me%ExternalParam%DenitrificationSatConst = Me%ExternalVar%Ratios(15)
-
-   if(Me%ExternalRatio%Diatm_are_calculated == 1) then   
-   Me%ExternalRatio%NC_diatm                = Me%ExternalVar%Ratios(16)  
-   Me%ExternalRatio%PC_diatm                = Me%ExternalVar%Ratios(17)   
-   endif
    
+
+i1:  if(Me%ExternalRatio%Diatm_are_calculated == 1)then
+  !i2:   if(Me%ExternalRatio%Cilia_are_calculated == 0)then   
+           Me%ExternalRatio%NC_diatm                = Me%ExternalVar%Ratios(16)  
+           Me%ExternalRatio%PC_diatm                = Me%ExternalVar%Ratios(17) 
+        ! elseif(Me%ExternalRatio%Cilia_are_calculated == 1)then
+          ! Me%ExternalRatio%NC_diatm                = Me%ExternalVar%Ratios(16)  
+         !  Me%ExternalRatio%PC_diatm                = Me%ExternalVar%Ratios(17) 
+          !Me%ExternalRatio%NC_cilia                = Me%ExternalVar%Ratios(18)  
+          !Me%ExternalRatio%PC_cilia                = Me%ExternalVar%Ratios(19)  
+         !endif i2 
+     elseif (Me%ExternalRatio%Cilia_are_calculated == 1)then
+          !Me%ExternalRatio%NC_cilia                = Me%ExternalVar%Ratios(16)  
+          !Me%ExternalRatio%PC_cilia                = Me%ExternalVar%Ratios(17) 
+     endif i1
+   
+     
    !WQ configuration
-   i1: if (Me%ExternalRatio%Diatm_are_calculated == 0) then 
+   i2: if (Me%ExternalRatio%Diatm_are_calculated == 0) then 
        
-             !if (Me%ExternalRatio%Ciliates_are_calculated == 0) then 
+             !if (Me%ExternalRatio%Cilia_are_calculated == 0) then 
                  
                  Me%PelagicModuleConfiguration = 1
                  
-             !elseif (Me%ExternalRatio%Ciliates_are_calculated == 1) then  
+             !elseif (Me%ExternalRatio%Cilia_are_calculated == 1) then  
                  
                  !Me%PelagicModuleConfiguration = 3
              !endif   
              
         elseif (Me%ExternalRatio%Diatm_are_calculated == 1) then 
 
-             !if (Me%ExternalRatio%Ciliates_are_calculated == 0) then 
+             !if (Me%ExternalRatio%Cilia_are_calculated == 0) then 
                  
                  Me%PelagicModuleConfiguration = 2
                  
-             !elseif (Me%ExternalRatio%Ciliates_are_calculated == 1) then  
+             !elseif (Me%ExternalRatio%Cilia_are_calculated == 1) then  
                  
                  !Me%PelagicModuleConfiguration = 4
              !endif                
-       endif i1
+       endif i2
  !----------------------------------------------------------------------------
  end subroutine Biogeochemical_ratios_and_parameters
  !::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
@@ -1204,22 +1228,22 @@ d1:         do index = Me%Array%ILB, Me%Array%IUB
      CASE(1)                                           !Alk_param and DIC_no_calc
        
        call ComputeAlkalinity_param      (index)
-       call ComputeDIC_no_calc           (index) 
+       !call ComputeDIC_no_calc           (index) 
        
      CASE(2)                                           !Alk_param and DIC_calc
        
         call ComputeAlkalinity_param     (index)
-        call ComputeDIC_calc             (index) 
+        !call ComputeDIC_calc             (index) 
         
      CASE(3)                                           !Alk_bio and DIC_no_cacl
        
          call ComputeAlkalinity_bio      (index)
-         call ComputeDIC_no_calc         (index) 
+         !call ComputeDIC_no_calc         (index) 
          
      CASE(4)                                           !Alk_bio and DIC_calc
        
          call ComputeAlkalinity_bio_calc (index)
-         call ComputeDIC_calc            (index)  
+         !call ComputeDIC_calc            (index)  
          
    END SELECT  
    
@@ -1294,12 +1318,12 @@ i1:     IF (((Lat .GE. 30.) .AND. (lat < 80.)) .and. ((Long .GE. -100.) .AND. (L
    SELECT CASE(Ocean_Case)
          
      CASE ('North_Atlantic')
-      write(*,*)'Ocean_Case is North_Atlantic'
+      !write(*,*)'Ocean_Case is North_Atlantic' marta
         if (temp < 20.) then    
           ALK = 2305. + 53.97 * (Me%ExternalVar%Salinity(index) - 35.) + 2.74 *((Me%ExternalVar%Salinity(index) - 35.) ** 2.) &
                    & - 1.16 *(Me%ExternalVar%Temperature(index) - 20.) - 0.040*((Me%ExternalVar%Temperature(index) - 20.)** 2.)
         else
-          write(*,*)'Ha cambiado a subtropics por la temperatura' !marta
+          !write(*,*)'Ha cambiado a subtropics por la temperatura' !marta
          ALK = 2305. + 58.66 * (Me%ExternalVar%Salinity(index) - 35.) + 2.32 *((Me%ExternalVar%Salinity(index) - 35.) ** 2.) &
                      & - 1.41 *(Me%ExternalVar%Temperature(index) - 20.) + 0.040*((Me%ExternalVar%Temperature(index) - 29.)** 2.) 
         endif    
@@ -1425,27 +1449,28 @@ i3:     if (temp > 20.) then
      real           :: yP_d          !Diatoms P/C stoichometry ratio used in pelagic module
      real           :: yN_z          !Zooplankton N/C stoichometry ratio used in pelagic module
      real           :: yP_z          !Zooplankton P/C stoichometry ratio used in pelagic module
+     real           :: yN_c          !Ciliates N/C stoichometry ratio used in pelagic module
+     real           :: yP_c          !Ciliates P/C stoichometry ratio used in pelagic module
   !----------------------------------------------------------------------------------------------    
      yN_p = Me%ExternalRatio%NC_phyto    
      yP_p = Me%ExternalRatio%PC_phyto
      yN_d = Me%ExternalRatio%NC_diatm
      yP_d = Me%ExternalRatio%PC_diatm
      yN_z = Me%ExternalRatio%NC_zoo
-     yP_z = Me%ExternalRatio%PC_zoo    
+     yP_z = Me%ExternalRatio%PC_zoo  
+     !yN_c = Me%ExternalRatio%NC_cilia
+     !yP_c = Me%ExternalRatio%PC_cilia   
   !------------------------------------------------------------------------------------------------    
           
-   call Compute_biogeoch_rates_nitr_denit (index, Nitrif1, Nitrif2, Denit)  
-   
+   call Compute_biogeoch_rates_nitr_denit (index, Nitrif1, Nitrif2, Denit)     
  
    select case(Me%PelagicModuleConfiguration)
         
    case(1) !Phyto and Zoo
        
         call Compute_biogeoch_rates_resp(index, phyto_resp, zoo_resp) 
-        call Compute_biogeoch_rates_nitrogen_uptake(phyto_am_uptk, phyto_na_uptk)
-       
-        
-        
+        call Compute_biogeoch_rates_nitrogen_uptake(index, phyto_am_uptk, phyto_na_uptk)       
+               
         
         Me%ExternalVar%Mass(Me%PropIndex%ALK_cs_b, Index) = Me%ExternalVar%Mass(Me%PropIndex%ALK_cs_b, Index) &    
                                                            + (0.8 + yN_p - yP_p) * Denit                      & ! <- sources 
@@ -1464,17 +1489,20 @@ i3:     if (temp > 20.) then
           call Compute_biogeoch_rates_resp(index, phyto_resp, zoo_resp, &
                                            diato_respiration = diatm_resp) 
           
+          call Compute_biogeoch_rates_nitrogen_uptake(index, phyto_am_uptk, phyto_na_uptk, &
+                                                      diatm_am_uptk, diatm_na_uptk )
+          
           Me%ExternalVar%Mass(Me%PropIndex%ALK_cs_b, Index) = Me%ExternalVar%Mass(Me%PropIndex%ALK_cs_b, Index)     &    
                                                               + (0.8 + yN_pd - yP_pd) * Denit                       &  ! <- sources
                                                              ! + (yN_p + yP_p) * phyto_na_uptk                      & 
-                                                             ! + (yN_d + yP_d) * PPbasedonnitrate_diat              &
+                                                             ! + (yN_d + yP_d) * diatm_na_uptk                      &
                                                              ! + (yN_p - yP_p) * phyto_resp                         & 
                                                              ! + (yN_z - yP_z) * zoo_resp                           & 
                                                              ! + (yN_d - yP_d) * diatm_resp                         &                                                      
                                                               - Nitrif1                                             &  ! <- sinks
                                                               - Nitrif2                                        
                                                              !- (yP_p + yN_p) * phyto_am_uptk                       &   
-                                                             !- (yP_d + yN_d) * PPbasedonammonia_diat)                          
+                                                             !- (yP_d + yN_d) * diatm_am_uptk)                          
     
    !case(3) !Phyto, Zoo and ciliates
           !call Compute_biogeoch_rates_resp(index, phyto_resp, zoo_resp,& 
@@ -1493,9 +1521,31 @@ i3:     if (temp > 20.) then
                                                           !-(yP_p + yN_p) * phyto_am_uptk                                                              
        
    !case(4) !Phyto, Zoo, ciliates and diatoms
-          !call Compute_biogeoch_rates_resp(index,  phyto_resp,  zoo_resp,  &
-          !                                  diato_respiration = diatm_resp, & 
-          !                                  cilia_respiration = cil_resp  )
+          
+          yN_pd = (yN_p + yN_d) / 2. 
+          yP_pd = (yP_p + yP_d) / 2.          
+          
+          !call Compute_biogeoch_rates_resp(index,  phyto_resp,  zoo_resp,          &
+          !                                         diato_respiration = diatm_resp, & 
+          !                                         cilia_respiration = cil_resp  )
+          
+          !call Compute_biogeoch_rates_nitrogen_uptake(index, phyto_am_uptk, phyto_na_uptk,  &
+        !                                                     diatm_am_uptk, diatm_na_uptk )
+          
+          !Me%ExternalVar%Mass(Me%PropIndex%ALK_cs_b, Index) = Me%ExternalVar%Mass(Me%PropIndex%ALK_cs_b, Index)    &    
+          !                                                    + (0.8 + yN_pd - yP_pd) * Denit                      &  ! <- sources
+                                                             ! + (yN_p + yP_p) * phyto_na_uptk                      & 
+                                                             ! + (yN_d + yP_d) * diatm_na_uptk                      &
+                                                             ! + (yN_p - yP_p) * phyto_resp                         & 
+                                                             ! + (yN_z - yP_z) * zoo_resp                           & 
+                                                             ! + (yN_d - yP_d) * diatm_resp                         &  
+                                                             ! + (yN_c - yP_c) * cil_resp                           & 
+         !                                                     - Nitrif1                                            &  ! <- sinks
+         !                                                     - Nitrif2                                        
+                                                             !- (yP_p + yN_p) * phyto_am_uptk                       &   
+                                                             !- (yP_d + yN_d) * diatm_am_uptk)  
+          
+          
    end select
          !elseif (Me%ComputeOptions%PelagicModel .eq. LifeModel) then
            !Facer um get como o getNCratio do WaterQuality,para crear um array com os mesmos valores e dimension. 
@@ -1523,8 +1573,15 @@ i3:     if (temp > 20.) then
    !Local--------------------------------------------------------------------   
      real           :: Nitrif1       !Nitrif1 
      real           :: Nitrif2       !Nitrif2 
-     real           :: Denit         !Denitrification
-     
+     real           :: Denit         !Denitrification  
+     real           :: phyto_resp    !Phytoplankton organic matter aerobic mineralization
+     real           :: zoo_resp      !Zooplankton organic matter aerobic mineralization
+     real           :: diatm_resp    !Diatoms organic matter aerobic mineralization
+     real           :: cil_resp      !Ciliates organic matter aerobic mineralization
+     real           :: phyto_am_uptk !Phytoplankton ammonia uptake
+     real           :: phyto_na_uptk !Phytoplankton nitrate uptake
+     real           :: diatm_am_uptk !Diatoms ammonia uptake
+     real           :: diatm_na_uptk !Diatoms nitrate uptake
      
      real           :: yN_pd         !Mean N/C stoichometry ratio used by phyto and diatoms
      real           :: yP_pd         !Mean N/C stoichometry ratio used by phyto and diatoms
@@ -1545,15 +1602,13 @@ i3:     if (temp > 20.) then
           
    call Compute_biogeoch_rates_nitr_denit (index, Nitrif1, Nitrif2, Denit) 
    !call Compute_biogeoch_rates_caco3(index)
- 
-   
    
    select case(Me%PelagicModuleConfiguration)
         
    case(1) !Phyto and Zoo
        
        call Compute_biogeoch_rates_resp(index, phyto_resp, zoo_resp) 
-       call Compute_biogeoch_rates_nitrogen_uptake(phyto_am_uptk, phyto_na_uptk)
+       call Compute_biogeoch_rates_nitrogen_uptake(index, phyto_am_uptk, phyto_na_uptk)
      
       Me%ExternalVar%Mass(Me%PropIndex%ALK_cs_b, Index) = Me%ExternalVar%Mass(Me%PropIndex%ALK_cs_b, Index) &    
                                                               + (0.8 + yN_p - yP_p) * Denit                         & ! <- sources 
@@ -1601,7 +1656,6 @@ i3:     if (temp > 20.) then
  
  
  
- 
  !>@author Marta López, Maretec
  !>@Brief: Calculate several biogeochemical rates for each grid cell, in every
  !>time step
@@ -1631,8 +1685,7 @@ i3:     if (temp > 20.) then
      integer        :: O
  !--------------------------------------------------------------------------       
      Pelagic_module_DTDay = Me%ExternalParam%pelagic_module_dt_day
-        Pelagic_module_DT = Me%ExternalParam%pelagic_module_dt
-                       O  = Me%PropIndex%Oxygen                    
+        Pelagic_module_DT = Me%ExternalParam%pelagic_module_dt                       
  !--------------------------------------------------------------------------  
                   
  !Rates are mass rates in mg/seconds (mg/WQDT_seconds). Conversion to moles (i.e. amount of moles 
@@ -1653,11 +1706,11 @@ i3:     if (temp > 20.) then
      
      !NITRIFICATION and DENITRIFICATION (based on WaterQuality)
      
-      x5 = MAX(Me%ExternalVar%Mass(O, index),Me%ExternalParam%MinOxygen)                                 &
-           /(Me%ExternalParam%NitrificationSatConst + Me%ExternalVar%Mass(O, index))
+      x5 = MAX(Me%ExternalVar%Mass(Oxygen_, index),Me%ExternalParam%MinOxygen)                                 &
+           /(Me%ExternalParam%NitrificationSatConst + Me%ExternalVar%Mass(Oxygen_, index))
       
       x1 = Me%ExternalParam%DenitrificationSatConst / (Me%ExternalParam%DenitrificationSatConst          &
-                                        + MAX(Me%ExternalVar%Mass(O, index),Me%ExternalParam%MinOxygen))
+                                        + MAX(Me%ExternalVar%Mass(Oxygen_, index),Me%ExternalParam%MinOxygen))
       
             
       NitrificationRateK1 = Me%ExternalParam%KNitrificationRateK1 * Me%ExternalParam%TNitrification      &
@@ -1671,21 +1724,21 @@ i3:     if (temp > 20.) then
       
       
       !  [mgN/l]     =            DtDay        *      1/Days         *          [mgN/l] 
-      Nitrif1_RAMIRO = NitrificationRateK1 * Pelagic_module_DTDay * Me%ExternalVar%Mass(Me%PropIndex%AM,Index)
-      Nitrif2_RAMIRO = NitrificationRateK2 * Pelagic_module_DTDay * Me%ExternalVar%Mass(Me%PropIndex%NI,Index)
-      Denitri_RAMIRO = DenitrificationRate * Pelagic_module_DTDay * Me%ExternalVar%Mass(Me%PropIndex%NA,Index)
+      Nitrif1_RAMIRO = NitrificationRateK1 * Pelagic_module_DTDay * Me%ExternalVar%Mass(Ammonia_,Index)
+      Nitrif2_RAMIRO = NitrificationRateK2 * Pelagic_module_DTDay * Me%ExternalVar%Mass(Nitrite_,Index)
+      Denitri_RAMIRO = DenitrificationRate * Pelagic_module_DTDay * Me%ExternalVar%Mass(Nitrate_,Index)
       
       ![mgN/dt]      =     [mgN/l]   *      [l/cell]                  /        [dt] 
       Nitrif1_RAMIRO = Nitrif1_RAMIRO * Me%ExternalVar%VolumenZ(index) / Pelagic_module_DT
       Nitrif2_RAMIRO = Nitrif2_RAMIRO * Me%ExternalVar%VolumenZ(index) / Pelagic_module_DT
       Denitri_RAMIRO = Denitri_RAMIRO * Me%ExternalVar%VolumenZ(index) / Pelagic_module_DT    
             
-      ![mmolesN/dt]  =   [mgN/dt]     /     [mgN/mmolN]          
+      ![mmolN/dt]    =   [mgN/dt]     /     [mgN/mmolN]          
       Nitrif1_RAMIRO = Nitrif1_RAMIRO / Me%AuxParam%N_AtomicMass
       Nitrif2_RAMIRO = Nitrif2_RAMIRO / Me%AuxParam%N_AtomicMass
       Denitri_RAMIRO = Denitri_RAMIRO / Me%AuxParam%N_AtomicMass
       
-      ![umolesN/dt]  = [mmolesN/dt]   *  10^3
+      ![umolN/dt]    = [mmolN/dt]     *  10^3
       Nitrif1_RAMIRO = Nitrif1_RAMIRO / 0.001
       Nitrif2_RAMIRO = Nitrif2_RAMIRO / 0.001
       Denitri_RAMIRO = Denitri_RAMIRO / 0.001
@@ -1700,7 +1753,7 @@ i3:     if (temp > 20.) then
  !>@Brief: Calculate several biogeochemical rates for each grid cell, in every
  !>time step
  !>@param[in] index
- !>@param[out] phyto, zoo, diatoms and ciliates respiration in mgC/l
+ !>@param[out] phyto, zoo, diatoms and ciliates respiration in umolC
  !::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::: 
  
   subroutine Compute_biogeoch_rates_resp (index, phyto_respiration &
@@ -1712,8 +1765,7 @@ i3:     if (temp > 20.) then
      real   , intent(OUT)            :: phyto_respiration
      real   , intent(OUT)            :: zoopl_respiration
      real   , intent(OUT), optional  :: diato_respiration
-     real   , intent(OUT), optional  :: cilia_respiration   
-     
+     real   , intent(OUT), optional  :: cilia_respiration        
  ! Local ---------------------------------------------------------------------     
      real           :: PhyRespirationRate
      real           :: ZooRespirationRate
@@ -1733,24 +1785,50 @@ i3:     if (temp > 20.) then
    !ZooRespirationRate = Me%ZooReferenceRespirationRate * Me%TZooLimitationFactor
    !PhyRespirationRate =   
      
-   !  [mgC/l]     =            (DtDay)      *      (1/Days)         *               [mgC/l]   
-   !zoopl_respiration  = ZooRespirationRate * Pelagic_module_DTDay  *  Me%ExternalVar%Mass(Me%PropIndex%phyto,Index) 
-   !phyto_respiration =                                                Me%ExternalVar%Mass(Me%PropIndex%phyto,Index)  
+   ![mgC/l]            =       (DtDay)      *      (1/Days)         *               [mgC/l]   
+   !zoopl_respiration  = ZooRespirationRate * Pelagic_module_DTDay  *  Me%ExternalVar%Mass(Zooplankton_  ,Index) 
+   !phyto_respiration  = PhyRespirationRate * Pelagic_module_DTDay  *  Me%ExternalVar%Mass(Phytoplankton_,Index)  
+     
+   ! [mgC/dt]          =      [mgC/l]      *      [l/cell]                  /        [dt] 
+   ! phyto_respiration = phyto_respiration * Me%ExternalVar%VolumenZ(index) / Pelagic_module_DT 
+   ! zoopl_respiration = zoopl_respiration * Me%ExternalVar%VolumenZ(index) / Pelagic_module_DT 
+    
+   ! [mmolC/dt]        =   [mgC/dt]        /     [mgC/mmolC]          
+   ! phyto_respiration = phyto_respiration / Me%AuxParam%C_AtomicMass 
+   ! zoopl_respiration = zoopl_respiration / Me%AuxParam%C_AtomicMas
+     
+   ! [umolC/dt]        = [mmolC/dt]        * 10^3
+   ! phyto_respiration = phyto_respiration / 0.001
+   ! zoopl_respiration = zoopl_respiration / 0.001 
+     
      
   if(Me%PelagicModuleConfiguration .ne. 1) then
       
      select case (Me%PelagicModuleConfiguration)
-       case(2)
-          !DiaRespirationRate    = 
-          diato_respiration = Pelagic_module_DTDay
-       case(3)
-           !CiliaRespirationRate =
-           cilia_respiration = Pelagic_module_DTDay
-       case(4)
-           !DiaRespirationRate   = 
-           !CiliaRespirationRate =
-           diato_respiration = Pelagic_module_DTDay
-           cilia_respiration = Pelagic_module_DTDay
+     case(2)
+          !DiaRespirationRate  = 
+          !diato_respiration = DiaRespirationRate * Pelagic_module_DTDay  *  Me%ExternalVar%Mass(Diatoms_ ,Index)
+          !diato_respiration = diato_respiration  * Me%ExternalVar%VolumenZ(index) / Pelagic_module_DT
+          !diato_respiration = diato_respiration  / (Me%AuxParam%C_AtomicMass * 0.001)
+     case(3)
+          !CiliaRespirationRate =
+          
+          !cilia_respiration = CiliaRespirationRate * Pelagic_module_DTDay  *  Me%ExternalVar%Mass(Ciliate_ ,Index)
+          !cilia_respiration = cilia_respiration * Me%ExternalVar%VolumenZ(index) / Pelagic_module_DT
+          !cilia_respiration = cilia_respiration / (Me%AuxParam%C_AtomicMass * 0.001)
+     case(4)
+          !DiaRespirationRate   = 
+          !CiliaRespirationRate =
+         
+          !diato_respiration = DiaRespirationRate * Pelagic_module_DTDay  *  Me%ExternalVar%Mass(Diatoms_,Index)
+          !diato_respiration = diato_respiration  * Me%ExternalVar%VolumenZ(index) / Pelagic_module_DT
+          !diato_respiration = diato_respiration / (Me%AuxParam%C_AtomicMass * 0.001)
+         
+          !cilia_respiration = CiliaRespirationRate * Pelagic_module_DTDay  *  Me%ExternalVar%Mass(Ciliate_ ,Index)
+          !cilia_respiration = cilia_respiration * Me%ExternalVar%VolumenZ(index) / Pelagic_module_DT
+          !cilia_respiration = cilia_respiration / (Me%AuxParam%C_AtomicMass * 0.001)
+         
+          
      end select  
       
   endif       
@@ -1762,7 +1840,7 @@ i3:     if (temp > 20.) then
 
 
  !>@author Marta López, Maretec
- !>@Brief: Calculate ammonia and nitrate phytoplankton and (if present) diatoms
+ !>@Brief: Calculate ammonia and nitrate phytoplankton and (if present diatoms)
  !> uptake due to primary production in each grid cell, for every time step   
  !>@param[in]  index
  !>@param[out] phyto_ammonia, phyto_ammonia, diato_ammonia, diato_nitrate 
@@ -1779,50 +1857,89 @@ i3:     if (temp > 20.) then
      real   , intent(OUT), optional  :: diato_ammonia
      real   , intent(OUT), optional  :: diato_nitrate   
 !-----------------------------------------------------------------------------
-     real    :: PhytoAmmoniaPreferenceFactor = null_real
+     
+     real    :: AmmoniaPreferenceFactor
+     real    :: DiaAmmoniaPreferenceFactor
+     real    :: x1,   x2,  x3,  x4
+     real    :: dx2, dx3, dx4
      real    :: Pelagic_module_DT
      real    :: Pelagic_module_DTDay
+     real    :: NSatConst 
+     real    :: DiaNSatConst 
+     real    :: phyto_ammonia_uptk
+     real    :: phyto_nitrate_uptk
+     real    :: diato_ammonia_uptk
+     real    :: diato_nitrate_uptk
+!-----------------------------------------------------------------------------  
      
      Pelagic_module_DTDay = Me%ExternalParam%pelagic_module_dt_day
      Pelagic_module_DT    = Me%ExternalParam%pelagic_module_dt
+     !NSatConst           = Me%ExternalParam%NSatConst
+     !DiaNSatConst        = Me%ExternalParam%DiaNSatConst
 !-----------------------------------------------------------------------------     
-     !Phyto 
-     
-     x1 = Me%ExternalVar%Mass(Me%PropIndex%AM,Index) * Me%ExternalVar%Mass(Me%PropIndex%NA,Index)
-     x2 = (Me%NSatConst + Me%ExternalVar%Mass(Me%PropIndex%AM,Index)) &
-                        * (Me%NSatConst + Me%ExternalVar%Mass(Me%PropIndex%NA,Index))
-     x3 = Me%NSatConst * Me%ExternalVar%Mass(Me%PropIndex%AM,Index)
-     x4 = (Me%ExternalVar%Mass(Me%PropIndex%AM,Index) + Me%ExternalVar%Mass(Me%PropIndex%NA,Index))  &
-                         * (Me%NSatConst + Me%ExternalVar%Mass(Me%PropIndex%NA,Index))
+      
+      NSatConst = 1. !MARTA BORRAR
+      DiaNSatConst = 1.
+      
+     ! Phyto 
+           
+     x1 = Me%ExternalVar%Mass(Ammonia_,Index) * Me%ExternalVar%Mass(Nitrate_,Index)
+     x2 = (NSatConst + Me%ExternalVar%Mass(Ammonia_, Index)) &
+                        * (NSatConst + Me%ExternalVar%Mass(Nitrate_,Index))
+     x3 = NSatConst * Me%ExternalVar%Mass(Ammonia_, Index)
+     x4 = (Me%ExternalVar%Mass(Ammonia_ ,Index) + Me%ExternalVar%Mass(Nitrate_,Index))  &
+                         * (NSatConst + Me%ExternalVar%Mass(Nitrate_,Index))
 
        if ((x1 .EQ. 0.0) .AND. (x3 .EQ. 0.0)) then
-                PhytoAmmoniaPreferenceFactor = 0.0                 
+                AmmoniaPreferenceFactor = 0.0                 
        else 
-                PhytoAmmoniaPreferenceFactor = (x1 / x2) + (x3 / x4)
+                AmmoniaPreferenceFactor = (x1 / x2) + (x3 / x4)
        end if 
-     
-     
-      phyto_ammonia = 
-                Me%Matrix(AM, Phyto   ) =  DTDay * ((PhytoAmmoniaPreferenceFactor                      &
-                                               * Me%AlfaPhytoNC                                    &
-                                               * Me%PhytoGrossGrowRate)-                           &
-                                               (PhytoExcretionNitrogen                             &
-                                               * Me%PhytoSolublInorgExcreFraction))                   
-      phyto_nitrate=
-            Me%Matrix(NA, Phyto   ) =  DTDay * (1. - PhytoAmmoniaPreferenceFactor)                 &
-                                             * Me%AlfaPhytoNC                                      &
-                                             * Me%PhytoGrossGrowRate 
+       
+   phyto_ammonia_uptk = AmmoniaPreferenceFactor *   Me%ExternalVar%Mass(PhytoGrossGrowRate_, index)
+   
+  !    (DtDay)        =      (dimensionless)    *      (d-1)     
+  !phyto_ammonia_uptk = AmmoniaPreferenceFactor * Me%ExternalParam%PhytoGrossGrowRate                  
+  !phyto_nitrate_uptk = (1. - AmmoniaPreferenceFactor) * Me%ExternalParam%PhytoGrossGrowRate
+       
 
+  ![mgC/l]            =       (DtDay)      *      (1/Days)        *               [mgC/l]  
+  ! phyto_ammonia     = phyto_ammonia_uptk * Pelagic_module_DTDay * Me%ExternalVar%Mass(Me%PropIndex%phyto,Index)
+  ! phyto_nitrate     = phyto_nitrate_uptk * Pelagic_module_DTDay * Me%ExternalVar%Mass(Me%PropIndex%phyto,Index)   
+           
+  ! [mgC/dt]          =      [mgC/l]      *      (l/cell)                  /        (dt) 
+  ! phyto_ammonia     =    phyto_ammonia  * Me%ExternalVar%VolumenZ(index) / Pelagic_module_DT 
+  ! phyto_nitrate     =    phyto_nitrate  * Me%ExternalVar%VolumenZ(index) / Pelagic_module_DT 
+    
+  ! [mmolC/dt]        =   [mgC/dt]        /     [mgC/mmolC]          
+  ! phyto_ammonia     = phyto_ammonia     / Me%AuxParam%C_AtomicMass 
+  ! phyto_nitrate     = phyto_nitrate     / Me%AuxParam%C_AtomicMas
      
-     
-     
-     
-     
-     
-     
+  ! [umolC/dt]        = [mmolC/dt]        * 10^3
+  ! phyto_ammonia     = phyto_ammonia / 0.001
+  ! phyto_nitrate     = phyto_nitrate / 0.001
+       
+       
+     ! Diatoms  
+       
      if(present(diato_ammonia))then
-         diato_ammonia
-         diato_nitrate 
+          
+         x2 = (DiaNSatConst + Me%ExternalVar%Mass(Ammonia_,Index)) &
+                        * (DiaNSatConst + Me%ExternalVar%Mass(Nitrate_,Index))
+         x3 = DiaNSatConst * Me%ExternalVar%Mass(Ammonia_,Index)
+         x4 = (Me%ExternalVar%Mass(Ammonia_,Index) + Me%ExternalVar%Mass(Nitrate_,Index))  &
+                         * (DiaNSatConst + Me%ExternalVar%Mass(Nitrate_,Index))
+
+          if ((x1 .EQ. 0.0) .AND. (x3 .EQ. 0.0)) then
+                DiaAmmoniaPreferenceFactor = 0.0                 
+          else 
+                DiaAmmoniaPreferenceFactor = (x1 / x2) + (x3 / x4)
+          end if     
+       
+          
+       !diato_ammonia_uptk = DiaAmmoniaPreferenceFactor * Me%DiaGrossGrowRate
+       !diato_nitrate_uptk = (1. - DiaAmmoniaPreferenceFactor) * Me%DiaGrossGrowRate
+          
      endif
      
 
