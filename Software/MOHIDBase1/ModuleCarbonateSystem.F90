@@ -1703,7 +1703,7 @@ i3:     if (temp > 20.) then
           
     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!   
 
-     
+     ! Diferente forma para extraer el valor propuesta por Ramiro, test: coincide
      !NITRIFICATION and DENITRIFICATION (based on WaterQuality)
      
       x5 = MAX(Me%ExternalVar%Mass(Oxygen_, index),Me%ExternalParam%MinOxygen)                                 &
