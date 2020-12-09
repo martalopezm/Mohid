@@ -15588,7 +15588,7 @@ cd5:                if (TotalVolume > 0.) then
               !After that, divide the new cell-rate (mg) by time step (mg/dtsec)              
               !WQM%DT_Compute is DTSecond of WaterQuality:time step, in seconds, between 2 WaterQuality calls
               
-              !write(*,*) 'antesdevolumen=', WqRateX%Field(:,24,36)
+              !write(*,*) 'antesdevolumen=', WqRateX%Field(:,24,36) marta
               where (Me%ExternalVar%OpenPoints3D == WaterPoint) &
                     WqRateX%Field = WqRateX%Field * Me%ExternalVar%VolumeZ
               !write(*,*) 'despuesdevolumen=', WqRateX%Field(:,24,36)
@@ -15911,13 +15911,15 @@ cd5:                if (TotalVolume > 0.) then
         !Local-----------------------------------------------------------------
         type (T_Property),      pointer         :: PropertyX 
         real, pointer, dimension(:)             :: RatiosList
+        real, pointer, dimension(:)             :: GGRate
         !Begin-----------------------------------------------------------------
         if (MonitorPerformance) call StartWatch ("ModuleWaterProperties", "CarbonateSystem_Processes")  
         
         !If alk_bio, get the Water Quality Nitrogen/Carbon and Phosphorous/Carbon ratios of phyto, zoo and, 
         !if activated, diatoms. Also, get several parameters stablished in WaterQuality.dat 
         if (Me%WQRate_for_CS%Alk_option == 1) then
-           call GetWQParam(InterfaceID   = Me%ObjInterface, Ratios_and_Param_for_CS = RatiosList, STAT = STAT_CALL)
+           call GetWQParam(InterfaceID   = Me%ObjInterface, Ratios_and_Param_for_CS = RatiosList, &
+                                                            GrossGrowthRate = GGRate, STAT = STAT_CALL)
            !call GetWQGrossGR(InterfaceID   = Me%ObjInterface, Ratios_and_Param_for_CS = RatiosList, STAT = STAT_CALL)
            if (STAT_CALL /= SUCCESS_) call CloseAllAndStop ('CarbonateSystem_Processes- ModuleWaterProperties - ERR00')
         endif

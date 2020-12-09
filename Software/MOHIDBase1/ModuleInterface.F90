@@ -257,6 +257,7 @@ Module ModuleInterface
         real,    pointer, dimension(:    )      :: Rate_Nitrif1_1D           => null() !MartaLopez
         real,    pointer, dimension(:    )      :: Rate_Nitrif2_1D           => null() !MartaLopez
         real,    pointer, dimension(:    )      :: Rate_Denit_1D             => null() !MartaLopez
+        logical                                 :: CS_alk_yes                          !MartaLopez
         
 #ifdef _PHREEQC_        
         real,    pointer, dimension(:    )      :: WaterSaturation          => null()
@@ -1822,9 +1823,15 @@ cd1 :           if(STAT_CALL .EQ. KEYWORD_NOT_FOUND_ERR_) then
                 !Construct CarbonateSystem Model. 
                 call ConstructCarbonateSystem(Me%ObjCarbonateSystem,           &
                                               FileName = Me%FileName,          &
+                                              Alk_bio  = Me%CS_alk_yes,        &
                                               STAT = STAT_CALL) 
                 if (STAT_CALL /= SUCCESS_) stop 'StartSinksSourcesModel - ModuleInterface - ERR123'
- 
+                
+                if (Me%CS_alk_yes)then 
+                  call Construct_CSneedsWQ(Me%ObjCarbonateSystem, Me%Array%ILB, Me%Array%IUB,STAT_CALL)
+                  if (STAT_CALL /= SUCCESS_) stop 'StartSinksSourcesModel - ModuleInterface - ERR123b'
+                end if  
+                
                 !Number of properties involved
                 call GetCarbonateSystemSize(Me%ObjCarbonateSystem,              &
                                      PropLB = PropLB,                           &
@@ -3094,10 +3101,11 @@ cd14 :          if (Phosphorus) then
     !> used in WaterQuality.
     !>param[in] interfaceID !>param[out] Ratios_and_Param_for_CS, STAT
     !--------------------------------------------------------------------------
-    subroutine GetWQParam(interfaceID, Ratios_and_Param_for_CS, STAT)
+    subroutine GetWQParam(interfaceID, Ratios_and_Param_for_CS, GrossGrowthRate, STAT)
         !Arguments-------------------------------------------------------------
         integer                                            :: InterfaceID
         real, dimension(:), pointer, intent(OUT)           :: Ratios_and_Param_for_CS 
+        real, dimension(:), pointer, intent(OUT)           :: GrossGrowthRate
         integer, optional, intent(OUT)                     :: STAT        
         !External--------------------------------------------------------------
         integer                                         :: ready_, STAT_CALL
@@ -3111,6 +3119,7 @@ cd14 :          if (Phosphorus) then
              
                call GetWQparameters(WaterQualityID = Me%ObjWaterQuality,   &
                                     List = Ratios_and_Param_for_CS,        &
+                                    GGR  = GrossGrowthRate,                &
                                     STAT =  STAT_CALL)
                if (STAT_CALL /= SUCCESS_) stop 'GetWQParam - ModuleInterface - ERR01'
            
@@ -3546,7 +3555,6 @@ cd1 :   if ((ready_ .EQ. IDLE_ERR_) .OR. (ready_ .EQ. READ_LOCK_ERR_)) then
 
                     case(LifeModel)
                         
-                    !case(CarbonateSystemModel) !Marta: revisar, esto tiene qu estar aquºi?    
 
                 end select
 

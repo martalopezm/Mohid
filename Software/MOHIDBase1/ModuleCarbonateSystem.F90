@@ -371,11 +371,13 @@
 
   subroutine ConstructCarbonateSystem(ObjCarbonateSystemID, &                                      
                                       FileName,             &
+                                      Alk_bio,              &
                                       STAT)
     
      !Arguments---------------------------------------------------------------
        integer                        :: ObjCarbonateSystemID   
        character(len=*) , intent(IN)  :: FileName !path to carbonatesystem.dat file
+       logical, optional, intent(OUT) :: Alk_bio
        integer, optional, intent(OUT) :: STAT
      !External----------------------------------------------------------------
        integer                                 :: ready_, STAT_CALL
@@ -403,6 +405,10 @@ cd0 : if (ready_ .EQ. OFF_ERR_) then
           call PropertyIndexNumber
           call ConstructPropertyList
           call CS_configuration
+             Alk_bio = .false.
+             if(Me%ComputeOptions%BiologicalAlkalinity)then
+             Alk_bio = .true.
+             end if
           call KillEnterData(Me%ObjEnterData,STAT = STAT_CALL)   
             if (STAT_CALL .NE. SUCCESS_) stop 'ConstructCarbonateSystem - ModuleCarbonateSystem - ERROR #2'
         
@@ -1896,7 +1902,7 @@ i3:     if (temp > 20.) then
                 AmmoniaPreferenceFactor = (x1 / x2) + (x3 / x4)
        end if 
        
-   phyto_ammonia_uptk = AmmoniaPreferenceFactor *   Me%ExternalVar%Mass(PhytoGrossGrowRate_, index)
+  ! phyto_ammonia_uptk = AmmoniaPreferenceFactor *   Me%ExternalVar%Mass(PhytoGrossGrowRate_, index)
    
   !    (DtDay)        =      (dimensionless)    *      (d-1)     
   !phyto_ammonia_uptk = AmmoniaPreferenceFactor * Me%ExternalParam%PhytoGrossGrowRate                  

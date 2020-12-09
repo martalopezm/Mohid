@@ -60,6 +60,7 @@ Module ModuleWaterQuality
     public  ::      Construct_WQRateFlux
     public  ::          Construct_WQRF_prop_Phyto
     public  ::          Construct_WQRF_prop_Diatoms
+    public  ::      Construct_CSneedsWQ
     
      !Selector
     public  :: GetDTWQM
@@ -71,7 +72,7 @@ Module ModuleWaterQuality
                   
     public  :: GetNCRatio 
     public  :: GetWQparameters
-    public  :: GetWQGrossGrowthRate
+    !public  :: GetWQGrossGrowthRate !Marta
                   
     !Modifier
     public  :: WaterQuality            
@@ -106,6 +107,7 @@ Module ModuleWaterQuality
     private ::      WQSystemResolution
    
     private ::      WQRatesCalculation
+    private ::      WQRatesforCS
 
     !Destructor
     public  ::  KillWaterQuality
@@ -515,6 +517,8 @@ Module ModuleWaterQuality
         real,             pointer, dimension(:  )   :: IndTerm => null()
         real, pointer, dimension(:  )               :: NewMass => null()  !Used with Explicit method        
         real, pointer, dimension(:)                 :: Param_forCS  => null() !marta
+        real, pointer, dimension(:)                 :: GGR_forCS    => null() !marta
+        logical                                     :: CS_needs_WQ  = .false. !marta
         !Instance of Module_EnterData
         integer                                     :: ObjEnterData = 0
 
@@ -663,6 +667,7 @@ cd2:        if (.NOT. Me%CalcMethod%ExplicitMethod) then
         nullify(Me%IndTerm                 )
         nullify(Me%NewMass                 )       
         nullify(Me%Param_forCS             )
+        nullify(Me%GGR_forCS               )
 
     end Subroutine Nullify_all_Sub_Type_Pointers    
     
@@ -1149,6 +1154,51 @@ do2:        do while (associated(EquaRateFluxX))
    !--------------------------------------------------------------------------
     end subroutine Add_PropRateFlux 
    !--------------------------------------------------------------------------
+    
+    
+    !>@author: Marta Lopez
+    !>@Brief: If CarbonateSystem module needs some WQ rates, allocate and 
+    !> initialize the respective arrays
+    !>@param[in] WQArrayLB, WQArrayUB
+    !--------------------------------------------------------------------------
+
+    subroutine Construct_CSneedsWQ(WaterQualityID, WQArrayLB, WQArrayUB, STAT)
+
+    !Arguments---------------------------------------------------------------
+     integer                             :: WaterQualityID        
+     integer, optional                   :: STAT
+    !External----------------------------------------------------------------
+     integer                            :: WQArrayLB,WQArrayUB
+    !!Begin-------------------------------------------------------------------
+        integer                             :: STAT_CALL
+        integer                             :: STAT_, ready_ 
+    !--------------------------------------------------------------------------
+     STAT_ = UNKNOWN_
+
+     call Ready(WaterQualityID, ready_)
+
+cd0 :  if ((ready_ .EQ. IDLE_ERR_) .OR.                                    &
+           (ready_ .EQ. READ_LOCK_ERR_)) then 
+     
+       allocate(Me%GGR_forCS (WQArrayLB:WQArrayUB), STAT = STAT_CALL)
+         if (STAT_CALL .NE. SUCCESS_)                                &
+                stop 'Subroutine Construct_CSneedsWQ - ModuleWaterQuality. ERR01.'           
+    
+          Me%GGR_forCS(:) = 0.0 !initialization 
+          Me%CS_needs_WQ  = .true. 
+        STAT_ = SUCCESS_
+        else               
+        STAT_ = ready_
+        end if cd0
+
+        if (present(STAT))     &
+            STAT = STAT_
+    !--------------------------------------------------------------------------
+    end subroutine Construct_CSneedsWQ
+    !--------------------------------------------------------------------------
+    
+    
+    
     
     
    !--------------------------------------------------------------------------
@@ -4089,83 +4139,10 @@ cd1 : if ((ready_ .EQ. IDLE_ERR_     ) .OR.                                 &
    !>@Brief: Stores in 1D array several parameters, red in WaterQuality.dat, to 
    !> later pass the info to CarbonateSystemModule
     
-    subroutine GetWQparameters(WaterQualityID, List, STAT)
+    subroutine GetWQparameters(WaterQualityID, List, GGR, STAT)
     !Arguments-------------------------------------------------------------
         integer                                   :: WaterQualityID
         real, pointer, dimension(:)               :: List  
-        integer, optional, intent(OUT)            :: STAT    
-        !External--------------------------------------------------------------
-        integer                         :: ready_        
-        !Local-----------------------------------------------------------------
-        integer                         :: STAT_
-        integer                         :: STAT_CALL
-        !----------------------------------------------------------------------
-
-        STAT_ = UNKNOWN_
-
-        call Ready(WaterQualityID, ready_)
-
-cd1 : if ((ready_ .EQ. IDLE_ERR_     ) .OR.                                    &
-           (ready_ .EQ. READ_LOCK_ERR_)) then    
-    
-    cd2 :  if (Me%PropCalc%Diatoms) then            
-              allocate(Me%Param_forCS(1:17),STAT = STAT_CALL)
-              if (STAT_CALL .NE. SUCCESS_)                                     &
-                stop 'Subroutine GetWQparameters - ModuleWaterQuality. ERR01.'           
-           else            
-              allocate(Me%Param_forCS(1:15),STAT = STAT_CALL)
-              if (STAT_CALL .NE. SUCCESS_)                                     &
-                stop 'Subroutine GetWQparameters - ModuleWaterQuality. ERR02.'
-           end if cd2  
-    
-           Me%Param_forCS(:) = 0.0   !Array initialization
-           
-                    Me%Param_forCS(1)  = 0.       !Diatoms are not activated
-                    Me%Param_forCS(2)  = Me%DTSecond
-                    Me%Param_forCS(3)  = Me%DTDay                    
-                    Me%Param_forCS(4)  = Me%AlfaPhytoNC
-                    Me%Param_forCS(5)  = Me%AlfaPhytoPC
-                    Me%Param_forCS(6)  = Me%AlfaZooNC  
-                    Me%Param_forCS(7)  = Me%AlfaZooPC                    
-                    Me%Param_forCS(8)  = Me%MinOxygen
-                    Me%Param_forCS(9)  = Me%TNitrification
-                    Me%Param_forCS(10) = Me%NitrificationSatConst
-                    Me%Param_forCS(11) = Me%KNitrificationRateK1
-                    Me%Param_forCS(12) = Me%KNitrificationRateK2 
-                    Me%Param_forCS(13) = Me%KDenitrificationRate
-                    Me%Param_forCS(14) = Me%TDenitrification
-                    Me%Param_forCS(15) = Me%DenitrificationSatConst                   
-                    
-               if (Me%PropCalc%Diatoms) then    
-                    Me%Param_forCS(1)  = 1. !Key value to pass to CS module to know if diatoms are calculated
-                    Me%Param_forCS(16) = Me%Diatoms%DiaAlfaNC
-                    Me%Param_forCS(17) = Me%Diatoms%DiaAlfaPC                  
-               endif 
-               
-           List => Me%Param_forCS  
-           if (.not. associated(List)) stop 'ModuleWaterQuality-GetWQparameters- ERROR 01'
-          
-           STAT_ = SUCCESS_
-      else 
-            STAT_ = ready_
-      end if cd1
-        
-       if (present(STAT))STAT = STAT_
-
-    !----------------------------------------------------------------------
-
-    end subroutine GetWQparameters
-
-    !--------------------------------------------------------------------------
-    
-    
-    !>@author Marta López, Maretec
-   !>@Brief: Stores in 1D array GrossGrowthRate, to 
-   !> later pass the info to CarbonateSystemModule
-    
-    subroutine GetWQGrossGrowthRate(WaterQualityID, GGR, STAT)
-    !Arguments-------------------------------------------------------------
-        integer                                   :: WaterQualityID
         real, pointer, dimension(:)               :: GGR  
         integer, optional, intent(OUT)            :: STAT    
         !External--------------------------------------------------------------
@@ -4219,6 +4196,9 @@ cd1 : if ((ready_ .EQ. IDLE_ERR_     ) .OR.                                    &
            List => Me%Param_forCS  
            if (.not. associated(List)) stop 'ModuleWaterQuality-GetWQparameters- ERROR 01'
           
+           GGR  => Me%GGR_forCS  
+           if (.not. associated(GGR)) stop 'ModuleWaterQuality-GetWQparameters- ERROR 02'
+           
            STAT_ = SUCCESS_
       else 
             STAT_ = ready_
@@ -4228,7 +4208,46 @@ cd1 : if ((ready_ .EQ. IDLE_ERR_     ) .OR.                                    &
 
     !----------------------------------------------------------------------
 
-    end subroutine GetWQGrossGrowthRate
+    end subroutine GetWQparameters
+
+    !--------------------------------------------------------------------------
+    
+    
+    !>@author Marta López, Maretec
+   !>@Brief: Stores in 1D array GrossGrowthRate, to 
+   !> later pass the info to CarbonateSystemModule
+    
+    !subroutine GetWQGrossGrowthRate(WaterQualityID, GGR, STAT)
+    !Arguments-------------------------------------------------------------
+      !  integer                                   :: WaterQualityID
+      !  real, pointer, dimension(:)               :: GGR  
+      !!  integer, optional, intent(OUT)            :: STAT    
+        !External--------------------------------------------------------------
+     !   integer                         :: ready_        
+        !Local-----------------------------------------------------------------
+       ! integer                         :: STAT_        
+        !----------------------------------------------------------------------
+
+       ! STAT_ = UNKNOWN_
+
+       ! call Ready(WaterQualityID, ready_)
+
+!cd1 : if ((ready_ .EQ. IDLE_ERR_     ) .OR.                                    &
+      !     (ready_ .EQ. READ_LOCK_ERR_)) then    
+                
+      !     GGR => Me%GGR_forCS  
+      !     if (.not. associated(GGR)) stop 'ModuleWaterQuality-GetWQGrossGrowthRate- ERROR 01'
+          
+      !     STAT_ = SUCCESS_
+     ! else 
+     !       STAT_ = ready_
+     ! end if cd1
+        
+       !if (present(STAT))STAT = STAT_
+
+    !----------------------------------------------------------------------
+
+   !end subroutine GetWQGrossGrowthRate
 
     !--------------------------------------------------------------------------
     
@@ -4810,6 +4829,11 @@ do1 :       do index = WQArrayLB, WQArrayUB
                 if (associated(Me%FirstEquaRateFlux)) then
                     call WQRatesCalculation      (index)
                 end if
+                
+                if (Me%CS_needs_WQ) then  !marta
+                    call WQRatesforCS           (index)
+                end if
+                
 
                 call WQSystemResolution         (index)
                 
@@ -5374,6 +5398,26 @@ do1:    do while(associated(EquaRateFluxX))
     end subroutine WQRatesCalculation
 
      !----------------------------------------------------------------------------
+    
+   
+    
+   !>@author Marta López, Maretec
+   !>@Brief: Save some rates for CarbonateSystemModule
+   !----------------------------------------------------------------------------
+    subroutine WQRatesforCS(index)
+    
+   !Arguments-------------------------------------------------------------------
+        integer, intent(IN) :: index
+   !----------------------------------------------------------------------------
+        Me%GGR_forCS(index) = Me%GrowMaxPhytoRate                              &
+                              * Me%TPhytoLimitationFactor                      &
+                              * Me%PhytoLightLimitationFactor                  &
+                              * Me%PhytoNutrientsLimitationFactor        
+    !----------------------------------------------------------------------------
+    end subroutine WQRatesforCS
+    !----------------------------------------------------------------------------
+    
+    
 
     subroutine WQBacteria(index)
 
@@ -9176,7 +9220,15 @@ cd4 :           if (associated(Me%NewMass)) then
                    if (STAT_CALL .NE. SUCCESS_)                                 &
                      stop 'Subroutine Kill_WaterQuality - ModuleWaterQuality. ERR05.'
                    nullify(Me%Param_forCS)
-              end if
+               end if
+               
+               if (associated(Me%GGR_forCS )) then
+                   deallocate(Me%GGR_forCS, STAT = STAT_CALL)
+                   if (STAT_CALL .NE. SUCCESS_)                                 &
+                     stop 'Subroutine Kill_WaterQuality - ModuleWaterQuality. ERR06.'
+                   nullify(Me%GGR_forCS )
+               end if
+                
 
                 call DeallocateInstance
 
