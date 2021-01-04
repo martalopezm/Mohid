@@ -4160,11 +4160,11 @@ cd1 : if ((ready_ .EQ. IDLE_ERR_     ) .OR.                                    &
            (ready_ .EQ. READ_LOCK_ERR_)) then    
     
     cd2 :  if (Me%PropCalc%Diatoms) then            
-              allocate(Me%Param_forCS(1:17),STAT = STAT_CALL)
+              allocate(Me%Param_forCS(1:27),STAT = STAT_CALL)
               if (STAT_CALL .NE. SUCCESS_)                                     &
                 stop 'Subroutine GetWQparameters - ModuleWaterQuality. ERR01.'           
            else            
-              allocate(Me%Param_forCS(1:15),STAT = STAT_CALL)
+              allocate(Me%Param_forCS(1:30),STAT = STAT_CALL)
               if (STAT_CALL .NE. SUCCESS_)                                     &
                 stop 'Subroutine GetWQparameters - ModuleWaterQuality. ERR02.'
            end if cd2  
@@ -4185,12 +4185,25 @@ cd1 : if ((ready_ .EQ. IDLE_ERR_     ) .OR.                                    &
                     Me%Param_forCS(12) = Me%KNitrificationRateK2 
                     Me%Param_forCS(13) = Me%KDenitrificationRate
                     Me%Param_forCS(14) = Me%TDenitrification
-                    Me%Param_forCS(15) = Me%DenitrificationSatConst                   
-                    
+                    Me%Param_forCS(15) = Me%DenitrificationSatConst                    
+                    Me%Param_forCS(16) = Me%NSatConst
+                    Me%Param_forCS(17) = Me%PhytoEndogRepConst
+                    Me%Param_forCS(18) = Me%PhotorespFactor
+                    Me%Param_forCS(19) = Me%ZK1 
+                    Me%Param_forCS(20) = Me%ZK2
+                    Me%Param_forCS(21) = Me%ZK3
+                    Me%Param_forCS(22) = Me%ZK4 
+                    Me%Param_forCS(23) = Me%Toptzoomin
+                    Me%Param_forCS(24) = Me%Toptzoomax
+                    Me%Param_forCS(25) = Me%Tzoomin 
+                    Me%Param_forCS(26) = Me%Tzoomax 
+                    Me%Param_forCS(27) = Me%ZooReferenceRespirationRate 
+
                if (Me%PropCalc%Diatoms) then    
                     Me%Param_forCS(1)  = 1. !Key value to pass to CS module to know if diatoms are calculated
-                    Me%Param_forCS(16) = Me%Diatoms%DiaAlfaNC
-                    Me%Param_forCS(17) = Me%Diatoms%DiaAlfaPC                  
+                    Me%Param_forCS(28) = Me%Diatoms%DiaAlfaNC
+                    Me%Param_forCS(29) = Me%Diatoms%DiaAlfaPC  
+                    Me%Param_forCS(30) = Me%Diatoms%DiaNSatConst  
                endif 
                
            List => Me%Param_forCS  
@@ -4213,45 +4226,6 @@ cd1 : if ((ready_ .EQ. IDLE_ERR_     ) .OR.                                    &
     !--------------------------------------------------------------------------
     
     
-    !>@author Marta López, Maretec
-   !>@Brief: Stores in 1D array GrossGrowthRate, to 
-   !> later pass the info to CarbonateSystemModule
-    
-    !subroutine GetWQGrossGrowthRate(WaterQualityID, GGR, STAT)
-    !Arguments-------------------------------------------------------------
-      !  integer                                   :: WaterQualityID
-      !  real, pointer, dimension(:)               :: GGR  
-      !!  integer, optional, intent(OUT)            :: STAT    
-        !External--------------------------------------------------------------
-     !   integer                         :: ready_        
-        !Local-----------------------------------------------------------------
-       ! integer                         :: STAT_        
-        !----------------------------------------------------------------------
-
-       ! STAT_ = UNKNOWN_
-
-       ! call Ready(WaterQualityID, ready_)
-
-!cd1 : if ((ready_ .EQ. IDLE_ERR_     ) .OR.                                    &
-      !     (ready_ .EQ. READ_LOCK_ERR_)) then    
-                
-      !     GGR => Me%GGR_forCS  
-      !     if (.not. associated(GGR)) stop 'ModuleWaterQuality-GetWQGrossGrowthRate- ERROR 01'
-          
-      !     STAT_ = SUCCESS_
-     ! else 
-     !       STAT_ = ready_
-     ! end if cd1
-        
-       !if (present(STAT))STAT = STAT_
-
-    !----------------------------------------------------------------------
-
-   !end subroutine GetWQGrossGrowthRate
-
-    !--------------------------------------------------------------------------
-    
-
     subroutine GetWaterQualitySize(WaterQualityID, PropLB, PropUB, STAT)
 
         !Arguments-------------------------------------------------------------

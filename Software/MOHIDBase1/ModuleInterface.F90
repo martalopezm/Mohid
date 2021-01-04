@@ -254,6 +254,7 @@ Module ModuleInterface
         real,    pointer, dimension(:    )      :: Latitude1D                => null() !MartaLopez
         real,    pointer, dimension(:    )      :: Longitude1D               => null() !MartaLopez
         real,    pointer, dimension(:    )      :: Ratios1D                  => null() !MartaLopez
+        real,    pointer, dimension(:    )      :: GGR1D                     => null() !MartaLopez
         real,    pointer, dimension(:    )      :: Rate_Nitrif1_1D           => null() !MartaLopez
         real,    pointer, dimension(:    )      :: Rate_Nitrif2_1D           => null() !MartaLopez
         real,    pointer, dimension(:    )      :: Rate_Denit_1D             => null() !MartaLopez
@@ -3637,7 +3638,7 @@ cd1 :   if ((ready_ .EQ. IDLE_ERR_) .OR. (ready_ .EQ. READ_LOCK_ERR_)) then
                                   LightExtCoefField, WaterPercentage,                   &
                                   DissolvedToParticulate3D, SoilDryDensity, Salinity,   &
                                   pH, IonicStrength, PhosphorusAdsortionIndex,          &
-                                  Latitude, Longitude, Ratios_forCS,                    & !marta
+                                  Latitude, Longitude, Ratios_forCS, GGR_cs,            & !marta
                                   Rate_Nitrif1,Rate_Nitrif2,                            & !marta
                                   Rate_Denit,                                           & !marta
                                   NintFac3D, NintFac3DR, PintFac3D,                     &
@@ -3668,6 +3669,7 @@ cd1 :   if ((ready_ .EQ. IDLE_ERR_) .OR. (ready_ .EQ. READ_LOCK_ERR_)) then
         real,    optional, dimension(:,:  ), pointer    :: Latitude       !marta
         real,    optional, dimension(:,:  ), pointer    :: Longitude      !marta
         real,    optional, dimension(:    ), pointer    :: Ratios_forCS   !marta
+        real,    optional, dimension(:    ), pointer    :: GGR_cs         !marta
         real,    optional, dimension(:,:,:), pointer    :: Rate_Nitrif1   !marta
         real,    optional, dimension(:,:,:), pointer    :: Rate_Nitrif2   !marta
         real,    optional, dimension(:,:,:), pointer    :: Rate_Denit     !marta
@@ -3822,6 +3824,7 @@ cd1 :   if (ready_ .EQ. IDLE_ERR_) then
             end if 
             
             if(present(Ratios_forCS))Me%Ratios1D  => Ratios_forCS
+            if(present(GGR_cs      ))Me%GGR1D     => GGR_cs
             
 
             
@@ -4148,6 +4151,7 @@ cd4 :           if (ReadyToCompute) then
                                       Me%Latitude1D,                        &
                                       Me%Longitude1D,                       &
                                       Me%Ratios1D,                          &
+                                      Me%GGR1D,                             &
                                       Me%WaterVolume1D,                     &
                                       Me%Rate_Nitrif1_1D,                   &
                                       Me%Rate_Nitrif2_1D,                   &
@@ -5008,7 +5012,7 @@ cd4 :           if (ReadyToCompute) then
                                                        STAT = STAT_CALL)                    
                             if (STAT_CALL /= SUCCESS_) stop 'Modify_Interface1D - ModuleInterface - ERR11'
                            
-                            call ModifyCarbonateSystem(Me%ObjCarbonateSystem,  &
+                            call ModifyCarbonateSystem(Me%ObjCarbonateSystem,  & !marat poner como 3d
                                       Me%Salinity,                             &
                                       Me%Temperature,                          &
                                       Me%Thickness,                            &
