@@ -255,9 +255,6 @@ Module ModuleInterface
         real,    pointer, dimension(:    )      :: Longitude1D               => null() !MartaLopez
         real,    pointer, dimension(:    )      :: Ratios1D                  => null() !MartaLopez
         real,    pointer, dimension(:    )      :: GGR1D                     => null() !MartaLopez
-        real,    pointer, dimension(:    )      :: Rate_Nitrif1_1D           => null() !MartaLopez
-        real,    pointer, dimension(:    )      :: Rate_Nitrif2_1D           => null() !MartaLopez
-        real,    pointer, dimension(:    )      :: Rate_Denit_1D             => null() !MartaLopez
         logical                                 :: CS_alk_yes                          !MartaLopez
         
 #ifdef _PHREEQC_        
@@ -1227,26 +1224,14 @@ cd0 :   if (ready_ .EQ. OFF_ERR_) then
                 allocate(Me%Longitude1D(ArrayLB:ArrayUB), STAT = STAT_CALL)
                 if (STAT_CALL .NE. SUCCESS_)stop 'AllocateVariables - ModuleInterface - ERR163' 
                 
-                allocate(Me%Rate_Nitrif1_1D(ArrayLB:ArrayUB), STAT = STAT_CALL)
-                if (STAT_CALL .NE. SUCCESS_)stop 'AllocateVariables - ModuleInterface - ERR164' 
-                
-                allocate(Me%Rate_Nitrif2_1D(ArrayLB:ArrayUB), STAT = STAT_CALL)
-                if (STAT_CALL .NE. SUCCESS_)stop 'AllocateVariables - ModuleInterface - ERR165' 
-                
-                allocate(Me%Rate_Denit_1D(ArrayLB:ArrayUB), STAT = STAT_CALL)
-                if (STAT_CALL .NE. SUCCESS_)stop 'AllocateVariables - ModuleInterface - ERR166'
-                
                 allocate(Me%WaterVolume1D(ArrayLB:ArrayUB), STAT = STAT_CALL)
-                if (STAT_CALL .NE. SUCCESS_)stop 'AllocateVariables - ModuleInterface - ERR167'
+                if (STAT_CALL .NE. SUCCESS_)stop 'AllocateVariables - ModuleInterface - ERR164'
                 
                 Me%Salinity             = FillValueReal
                 Me%Thickness            = FillValueReal
                 Me%Latitude1D           = FillValueReal
                 Me%Longitude1D          = FillValueReal
                 Me%WaterVolume1D        = FillValueReal
-                Me%Rate_Nitrif1_1D      = FillValueReal
-                Me%Rate_Nitrif2_1D      = FillValueReal
-                Me%Rate_Denit_1D        = FillValueReal
                 
             case default
                 write(*,*) 
@@ -3638,9 +3623,7 @@ cd1 :   if ((ready_ .EQ. IDLE_ERR_) .OR. (ready_ .EQ. READ_LOCK_ERR_)) then
                                   LightExtCoefField, WaterPercentage,                   &
                                   DissolvedToParticulate3D, SoilDryDensity, Salinity,   &
                                   pH, IonicStrength, PhosphorusAdsortionIndex,          &
-                                  Latitude, Longitude, Ratios_forCS, GGR_cs,            & !marta
-                                  Rate_Nitrif1,Rate_Nitrif2,                            & !marta
-                                  Rate_Denit,                                           & !marta
+                                  Latitude, Longitude, Ratios_forCS, GGR_cs,            & !martalopez                                 
                                   NintFac3D, NintFac3DR, PintFac3D,                     &
                                   RootsMort, PintFac3DR,                                &
                                   SedimCellVol3D,                                       &
@@ -3666,13 +3649,10 @@ cd1 :   if ((ready_ .EQ. IDLE_ERR_) .OR. (ready_ .EQ. READ_LOCK_ERR_)) then
         real,    optional, dimension(:,:,:), pointer    :: SoilDryDensity
         real,    optional, dimension(:,:,:), pointer    :: Salinity
         real,    optional, dimension(:,:,:), pointer    :: pH
-        real,    optional, dimension(:,:  ), pointer    :: Latitude       !marta
-        real,    optional, dimension(:,:  ), pointer    :: Longitude      !marta
-        real,    optional, dimension(:    ), pointer    :: Ratios_forCS   !marta
-        real,    optional, dimension(:    ), pointer    :: GGR_cs         !marta
-        real,    optional, dimension(:,:,:), pointer    :: Rate_Nitrif1   !marta
-        real,    optional, dimension(:,:,:), pointer    :: Rate_Nitrif2   !marta
-        real,    optional, dimension(:,:,:), pointer    :: Rate_Denit     !marta
+        real,    optional, dimension(:,:  ), pointer    :: Latitude       !martalopez
+        real,    optional, dimension(:,:  ), pointer    :: Longitude      !martalopez
+        real,    optional, dimension(:    ), pointer    :: Ratios_forCS   !martalopez
+        real,    optional, dimension(:    ), pointer    :: GGR_cs         !martalopez
         
         real,    optional, dimension(:,:,:), pointer    :: NintFac3D  !Isabella
         real,    optional, dimension(:,:,:), pointer    :: NintFac3DR  !Isabella
@@ -3809,24 +3789,10 @@ cd1 :   if (ready_ .EQ. IDLE_ERR_) then
             
             if(present(SedimCellVol3D))then
                 call UnfoldMatrix(SedimCellVol3D, Me%SedimCellVol) 
-            end if  
-            
-            if(present(Rate_Nitrif1))then
-                call UnfoldMatrix(Rate_Nitrif1, Me%Rate_Nitrif1_1D)
-            end if
-            
-            if(present(Rate_Nitrif2))then
-                call UnfoldMatrix(Rate_Nitrif2, Me%Rate_Nitrif2_1D)
-            end if
-             
-            if(present(Rate_Denit))then
-                call UnfoldMatrix(Rate_Denit, Me%Rate_Denit_1D)
-            end if 
-            
+            end if             
+
             if(present(Ratios_forCS))Me%Ratios1D  => Ratios_forCS
             if(present(GGR_cs      ))Me%GGR1D     => GGR_cs
-            
-
             
             Me%ExternalVar%WaterPoints3D => WaterPoints3D
             
@@ -4135,13 +4101,13 @@ cd4 :           if (ReadyToCompute) then
                             
                             
                         case(CarbonateSystemModel)  
+                            
                             call UnfoldMatrix(Me%ExternalVar%DWZ, Me%Thickness)
                             call UnfoldMatrix(Latitude,     Me%Latitude1D)           
                             call UnfoldMatrix(Longitude,    Me%Longitude1D)                            
                             call GetComputeCurrentTime(Me%ObjTime, Me%ExternalVar%Now, STAT = STAT_CALL)                    
-                                 if (STAT_CALL /= SUCCESS_)   stop 'Modify_Interface3D - ModuleInterface - ERR18' 
-                            if(present(Ratios_forCS))then                            
-                               call ModifyCarbonateSystem(Me%ObjCarbonateSystem, &
+                                 if (STAT_CALL /= SUCCESS_)   stop 'Modify_Interface3D - ModuleInterface - ERR18'  
+                            call ModifyCarbonateSystem(Me%ObjCarbonateSystem, &
                                       Me%Salinity,                          &
                                       Me%Temperature,                       &
                                       Me%Thickness,                         &
@@ -4152,26 +4118,11 @@ cd4 :           if (ReadyToCompute) then
                                       Me%Longitude1D,                       &
                                       Me%Ratios1D,                          &
                                       Me%GGR1D,                             &
-                                      Me%WaterVolume1D,                     &
-                                      Me%Rate_Nitrif1_1D,                   &
-                                      Me%Rate_Nitrif2_1D,                   &
-                                      Me%Rate_Denit_1D,                     &
-                                      STAT_CALL)                                                 
-                                      if (STAT_CALL /= SUCCESS_) stop 'Modify_Interface3D - ModuleInterface - ERR18b'   
-                            else
-                               call ModifyCarbonateSystem(Me%ObjCarbonateSystem, &
-                                      Me%Salinity,                          &
-                                      Me%Temperature,                       &
-                                      Me%Thickness,                         &
-                                      Me%Mass,                              &
-                                      Me%OpenPoints,                        &
-                                      Me%Array,                             & 
-                                      Me%Latitude1D,                        &
-                                      Me%Longitude1D,                       &                                      
+                                      Me%WaterVolume1D,                     &                                 
                                       STAT = STAT_CALL)                                                 
-                                      if (STAT_CALL /= SUCCESS_) stop 'Modify_Interface3D - ModuleInterface - ERR18c'     
-                            endif                            
-                                  
+                                      if (STAT_CALL /= SUCCESS_) stop 'Modify_Interface3D - ModuleInterface - ERR18b'  
+                             
+                                      
                     end select
 
 #ifdef _PHREEQC_
@@ -4691,6 +4642,7 @@ do6 :               do index = ArrayLB, ArrayUB
                                   SoilDryDensity, Salinity, pH, IonicStrength,       &
                                   PhosphorusAdsortionIndex, WindVelocity,            &
                                   Oxygen1D, WaterVolume, CellArea,                   &
+                                  Latitude, Longitude, Ratios_forCS, GGR_cs,         & !martalopez 
                                   DTProp, STAT)
 
         !Arguments-------------------------------------------------------------
@@ -4714,6 +4666,10 @@ do6 :               do index = ArrayLB, ArrayUB
         real,    optional, dimension(:), pointer        :: Oxygen1D
         real(8), optional, dimension(:), pointer        :: WaterVolume
         real,    optional, dimension(:), pointer        :: CellArea
+        real,    optional, dimension(:,:  ), pointer    :: Latitude       !martalopez
+        real,    optional, dimension(:,:  ), pointer    :: Longitude      !martalopez
+        real,    optional, dimension(:    ), pointer    :: Ratios_forCS   !martalopez
+        real,    optional, dimension(:    ), pointer    :: GGR_cs         !martalopez
         real,    optional,  intent(IN)                  :: DTProp
         real,    optional, dimension(:), pointer        :: MacrOccupation, ShearStress, SPMFlux
         integer, optional,  intent(OUT)                 :: STAT
@@ -4779,7 +4735,10 @@ cd7 :       if (present(DTProp))then
             
             if(present(MacrOccupation))then
                 call UnfoldMatrix(MacrOccupation, Me%MacrOccupation)
-            end if            
+            end if         
+                        
+            if(present(Ratios_forCS))Me%Ratios1D  => Ratios_forCS
+            if(present(GGR_cs      ))Me%GGR1D     => GGR_cs
 
 cd5 :       if (.not. Increment) then 
 
@@ -4792,8 +4751,7 @@ cd4 :           if (ReadyToCompute) then
                     !Stores the concentration before changing them
                     Me%ConcentrationIncrement = Me%Mass
 
-                    !Associates External Instances
-                    !Me%SinksSourcesModel            =  SinksSourcesModel   !marta
+   
                     select case (Me%SinksSourcesModel)
 
                         case(WaterQualityModel)
@@ -5005,31 +4963,30 @@ cd4 :           if (ReadyToCompute) then
                             
                                                        
                             
-                         case(CarbonateSystemModel)
-                            call UnfoldMatrix(Me%ExternalVar%DWZ1D, Me%Thickness)                                          
-                            call GetComputeCurrentTime(Me%ObjTime,                  &
-                                                       Me%ExternalVar%Now,          &
-                                                       STAT = STAT_CALL)                    
-                            if (STAT_CALL /= SUCCESS_) stop 'Modify_Interface1D - ModuleInterface - ERR11'
-                           
-                            call ModifyCarbonateSystem(Me%ObjCarbonateSystem,  & !marat poner como 3d
-                                      Me%Salinity,                             &
-                                      Me%Temperature,                          &
-                                      Me%Thickness,                            &
-                                      Me%Mass,                                 &
-                                      Me%OpenPoints,                           &
-                                      Me%Array,                                &
-                                      Me%Ratios1D,                             &
-                                      Me%WaterVolume1D,                        &
-                                      Me%Latitude1D,                           &
-                                      Me%Longitude1D,                          &
-                                      Me%Rate_Nitrif1_1D,                      &
-                                      Me%Rate_Nitrif2_1D,                      &
-                                      Me%Rate_Denit_1D,                        &
-                                      STAT = STAT_CALL)
-                            if (STAT_CALL /= SUCCESS_) stop 'Modify_Interface1D - ModuleInterface - ERR12'    
+                         case(CarbonateSystemModel)                             
                             
-                    end select
+                            call UnfoldMatrix(Me%ExternalVar%DWZ, Me%Thickness)
+                            call UnfoldMatrix(Latitude,     Me%Latitude1D)           
+                            call UnfoldMatrix(Longitude,    Me%Longitude1D)                            
+                            call GetComputeCurrentTime(Me%ObjTime, Me%ExternalVar%Now, STAT = STAT_CALL)                    
+                                 if (STAT_CALL /= SUCCESS_)   stop 'Modify_Interface1D - ModuleInterface - ERR11' 
+                            call ModifyCarbonateSystem(Me%ObjCarbonateSystem, &
+                                      Me%Salinity,                          &
+                                      Me%Temperature,                       &
+                                      Me%Thickness,                         &
+                                      Me%Mass,                              &
+                                      Me%OpenPoints,                        &
+                                      Me%Array,                             & 
+                                      Me%Latitude1D,                        &
+                                      Me%Longitude1D,                       &
+                                      Me%Ratios1D,                          &
+                                      Me%GGR1D,                             &
+                                      Me%WaterVolume1D,                     &                                 
+                                      STAT = STAT_CALL)                                                 
+                                      if (STAT_CALL /= SUCCESS_) stop 'Modify_Interface1D - ModuleInterface - ERR18b'  
+                              
+                      
+                      end select
 
 do7 :               do prop  = PropLB,  PropUB
 do6 :               do index = ArrayLB, ArrayUB
@@ -8785,9 +8742,18 @@ cd1 :   if (ready_ .NE. OFF_ERR_) then
                          if(associated(Me%Longitude1D ))then
                            deallocate(Me%Longitude1D , STAT = STAT_CALL)
                            if (STAT_CALL .NE. SUCCESS_) stop 'KillInterface - ModuleInterface - ERR35.2'
-                        end if                       
-                         !marta:anhadir las que falten
-
+                         end if 
+                         
+                        if(associated(Me%Ratios1D))then
+                           deallocate(Me%Ratios1D, STAT = STAT_CALL)
+                           if (STAT_CALL .NE. SUCCESS_) stop 'KillInterface - ModuleInterface - ERR35.1'
+                        end if
+                        
+                        if(associated(Me%GGR1D ))then
+                           deallocate(Me%GGR1D , STAT = STAT_CALL)
+                           if (STAT_CALL .NE. SUCCESS_) stop 'KillInterface - ModuleInterface - ERR35.1'
+                        end if
+                                              
                         call KillCarbonateSystem(Me%ObjCarbonateSystem, STAT = STAT_CALL)
                         if (STAT_CALL .NE. SUCCESS_) stop 'KillInterface - ModuleInterface - ERR35'
            

@@ -4151,60 +4151,80 @@ cd1 : if ((ready_ .EQ. IDLE_ERR_     ) .OR.                                 &
         integer                         :: STAT_
         integer                         :: STAT_CALL
         !----------------------------------------------------------------------
-
         STAT_ = UNKNOWN_
-
         call Ready(WaterQualityID, ready_)
-
-cd1 : if ((ready_ .EQ. IDLE_ERR_     ) .OR.                                    &
+cd1 : if ((ready_ .EQ. IDLE_ERR_     ) .OR.  &
            (ready_ .EQ. READ_LOCK_ERR_)) then    
     
-    cd2 :  if (Me%PropCalc%Diatoms) then            
-              allocate(Me%Param_forCS(1:27),STAT = STAT_CALL)
+    cd2 :  if (Me%PropCalc%Diatoms) then  
+         cd3:     if (Me%PropCalc%Ciliate) then 
+                     allocate(Me%Param_forCS(1:33),STAT = STAT_CALL)
+                             if (STAT_CALL .NE. SUCCESS_) &
+                             stop 'Subroutine GetWQparameters - ModuleWaterQuality. ERR01.'
+                     Me%Param_forCS(:) = 0.0       !Array initialization                     
+                     Me%Param_forCS(1)  = 1.       !Diatoms are activated
+                     Me%Param_forCS(2)  = 1.       !Ciliates are activated  
+                     Me%Param_forCS(29) = Me%Diatoms%DiaAlfaNC
+                     Me%Param_forCS(30) = Me%Diatoms%DiaAlfaPC  
+                     Me%Param_forCS(31) = Me%Diatoms%DiaNSatConst 
+                     Me%Param_forCS(32) = Me%AlfaCilNC        
+                     Me%Param_forCS(33) = Me%AlfaCilPC      
+                  else cd3      
+                     allocate(Me%Param_forCS(1:31),STAT = STAT_CALL)
+                             if (STAT_CALL .NE. SUCCESS_) &
+                             stop 'Subroutine GetWQparameters - ModuleWaterQuality. ERR02.'
+                     Me%Param_forCS(:) = 0.0 
+                     Me%Param_forCS(1)  = 1.   !Diatoms are activated
+                     Me%Param_forCS(2)  = 0.   !Ciliates are not activated  
+                     Me%Param_forCS(29) = Me%Diatoms%DiaAlfaNC
+                     Me%Param_forCS(30) = Me%Diatoms%DiaAlfaPC  
+                     Me%Param_forCS(31) = Me%Diatoms%DiaNSatConst                     
+                  endif cd3
+                  
+           elseif ((Me%PropCalc%Ciliate).and.(.not. Me%PropCalc%Diatoms)) then
+                    allocate(Me%Param_forCS(1:30),STAT = STAT_CALL)
+                        if (STAT_CALL .NE. SUCCESS_)                               &
+                    stop 'Subroutine GetWQparameters - ModuleWaterQuality. ERR03.'
+                    Me%Param_forCS(:) = 0.0
+                    Me%Param_forCS(1)  = 0.   !Diatoms are not activated
+                    Me%Param_forCS(2)  = 1.   !Ciliates are activated  
+                    Me%Param_forCS(29) = Me%AlfaCilNC 
+                    Me%Param_forCS(30) = Me%AlfaCilPC  
+                        
+           else
+              allocate(Me%Param_forCS(1:28),STAT = STAT_CALL)
               if (STAT_CALL .NE. SUCCESS_)                                     &
-                stop 'Subroutine GetWQparameters - ModuleWaterQuality. ERR01.'           
-           else            
-              allocate(Me%Param_forCS(1:30),STAT = STAT_CALL)
-              if (STAT_CALL .NE. SUCCESS_)                                     &
-                stop 'Subroutine GetWQparameters - ModuleWaterQuality. ERR02.'
-           end if cd2  
-    
-           Me%Param_forCS(:) = 0.0   !Array initialization
-           
-                    Me%Param_forCS(1)  = 0.       !Diatoms are not activated
-                    Me%Param_forCS(2)  = Me%DTSecond
-                    Me%Param_forCS(3)  = Me%DTDay                    
-                    Me%Param_forCS(4)  = Me%AlfaPhytoNC
-                    Me%Param_forCS(5)  = Me%AlfaPhytoPC
-                    Me%Param_forCS(6)  = Me%AlfaZooNC  
-                    Me%Param_forCS(7)  = Me%AlfaZooPC                    
-                    Me%Param_forCS(8)  = Me%MinOxygen
-                    Me%Param_forCS(9)  = Me%TNitrification
-                    Me%Param_forCS(10) = Me%NitrificationSatConst
-                    Me%Param_forCS(11) = Me%KNitrificationRateK1
-                    Me%Param_forCS(12) = Me%KNitrificationRateK2 
-                    Me%Param_forCS(13) = Me%KDenitrificationRate
-                    Me%Param_forCS(14) = Me%TDenitrification
-                    Me%Param_forCS(15) = Me%DenitrificationSatConst                    
-                    Me%Param_forCS(16) = Me%NSatConst
-                    Me%Param_forCS(17) = Me%PhytoEndogRepConst
-                    Me%Param_forCS(18) = Me%PhotorespFactor
-                    Me%Param_forCS(19) = Me%ZK1 
-                    Me%Param_forCS(20) = Me%ZK2
-                    Me%Param_forCS(21) = Me%ZK3
-                    Me%Param_forCS(22) = Me%ZK4 
-                    Me%Param_forCS(23) = Me%Toptzoomin
-                    Me%Param_forCS(24) = Me%Toptzoomax
-                    Me%Param_forCS(25) = Me%Tzoomin 
-                    Me%Param_forCS(26) = Me%Tzoomax 
-                    Me%Param_forCS(27) = Me%ZooReferenceRespirationRate 
-
-               if (Me%PropCalc%Diatoms) then    
-                    Me%Param_forCS(1)  = 1. !Key value to pass to CS module to know if diatoms are calculated
-                    Me%Param_forCS(28) = Me%Diatoms%DiaAlfaNC
-                    Me%Param_forCS(29) = Me%Diatoms%DiaAlfaPC  
-                    Me%Param_forCS(30) = Me%Diatoms%DiaNSatConst  
-               endif 
+                stop 'Subroutine GetWQparameters - ModuleWaterQuality. ERR04.'
+                 Me%Param_forCS(:) = 0.0  
+                 Me%Param_forCS(1)  = 0.   
+                 Me%Param_forCS(2)  = 0.       
+           end if cd2      
+                    Me%Param_forCS(3)  = Me%DTSecond
+                    Me%Param_forCS(4)  = Me%DTDay                    
+                    Me%Param_forCS(5)  = Me%AlfaPhytoNC
+                    Me%Param_forCS(6)  = Me%AlfaPhytoPC
+                    Me%Param_forCS(7)  = Me%AlfaZooNC  
+                    Me%Param_forCS(8)  = Me%AlfaZooPC                    
+                    Me%Param_forCS(9)  = Me%MinOxygen
+                    Me%Param_forCS(10)  = Me%TNitrification
+                    Me%Param_forCS(11) = Me%NitrificationSatConst
+                    Me%Param_forCS(12) = Me%KNitrificationRateK1
+                    Me%Param_forCS(13) = Me%KNitrificationRateK2 
+                    Me%Param_forCS(14) = Me%KDenitrificationRate
+                    Me%Param_forCS(15) = Me%TDenitrification
+                    Me%Param_forCS(16) = Me%DenitrificationSatConst                    
+                    Me%Param_forCS(17) = Me%NSatConst
+                    Me%Param_forCS(18) = Me%PhytoEndogRepConst
+                    Me%Param_forCS(19) = Me%PhotorespFactor
+                    Me%Param_forCS(20) = Me%ZK1 
+                    Me%Param_forCS(21) = Me%ZK2
+                    Me%Param_forCS(22) = Me%ZK3
+                    Me%Param_forCS(23) = Me%ZK4 
+                    Me%Param_forCS(24) = Me%Toptzoomin
+                    Me%Param_forCS(25) = Me%Toptzoomax
+                    Me%Param_forCS(26) = Me%Tzoomin 
+                    Me%Param_forCS(27) = Me%Tzoomax 
+                    Me%Param_forCS(28) = Me%ZooReferenceRespirationRate 
                
            List => Me%Param_forCS  
            if (.not. associated(List)) stop 'ModuleWaterQuality-GetWQparameters- ERROR 01'
