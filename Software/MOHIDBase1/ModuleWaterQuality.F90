@@ -516,9 +516,10 @@ Module ModuleWaterQuality
         double precision, pointer, dimension(:,:)   :: Matrix  => null()
         real,             pointer, dimension(:  )   :: IndTerm => null()
         real, pointer, dimension(:  )               :: NewMass => null()  !Used with Explicit method        
-        real, pointer, dimension(:)                 :: Param_forCS  => null() !marta
-        real, pointer, dimension(:)                 :: GGR_forCS    => null() !marta
-        logical                                     :: CS_needs_WQ  = .false. !marta
+        real, pointer, dimension(:)                 :: Param_forCS   => null() !marta
+        real, pointer, dimension(:)                 :: GGR_forCS     => null() !marta
+        real, pointer, dimension(:)                 :: GGRdiat_forCS => null() !marta
+        logical                                     :: CS_needs_WQ   = .false. !marta
         !Instance of Module_EnterData
         integer                                     :: ObjEnterData = 0
 
@@ -668,6 +669,7 @@ cd2:        if (.NOT. Me%CalcMethod%ExplicitMethod) then
         nullify(Me%NewMass                 )       
         nullify(Me%Param_forCS             )
         nullify(Me%GGR_forCS               )
+        nullify(Me%GGRdiat_forCS           )
 
     end Subroutine Nullify_all_Sub_Type_Pointers    
     
@@ -1180,12 +1182,20 @@ do2:        do while (associated(EquaRateFluxX))
 cd0 :  if ((ready_ .EQ. IDLE_ERR_) .OR.                                    &
            (ready_ .EQ. READ_LOCK_ERR_)) then 
      
-       allocate(Me%GGR_forCS (WQArrayLB:WQArrayUB), STAT = STAT_CALL)
+         allocate(Me%GGR_forCS (WQArrayLB:WQArrayUB), STAT = STAT_CALL)
          if (STAT_CALL .NE. SUCCESS_)                                &
                 stop 'Subroutine Construct_CSneedsWQ - ModuleWaterQuality. ERR01.'           
     
           Me%GGR_forCS(:) = 0.0 !initialization 
           Me%CS_needs_WQ  = .true. 
+          
+           if(Me%PropCalc%Diatoms) then
+               allocate(Me%GGRdiat_forCS (WQArrayLB:WQArrayUB), STAT = STAT_CALL)
+                if (STAT_CALL .NE. SUCCESS_)                                &
+                stop 'Subroutine Construct_CSneedsWQ - ModuleWaterQuality. ERR02.'
+                Me%GGRdiat_forCS(:) = 0.0 
+           endif          
+          
         STAT_ = SUCCESS_
         else               
         STAT_ = ready_
@@ -4139,11 +4149,12 @@ cd1 : if ((ready_ .EQ. IDLE_ERR_     ) .OR.                                 &
    !>@Brief: Stores in 1D array several parameters, red in WaterQuality.dat, to 
    !> later pass the info to CarbonateSystemModule
     
-    subroutine GetWQparameters(WaterQualityID, List, GGR, STAT)
+    subroutine GetWQparameters(WaterQualityID, List, GGR, GGRdia, STAT)
     !Arguments-------------------------------------------------------------
         integer                                   :: WaterQualityID
         real, pointer, dimension(:)               :: List  
         real, pointer, dimension(:)               :: GGR  
+        real, pointer, dimension(:), optional     :: GGRdia 
         integer, optional, intent(OUT)            :: STAT    
         !External--------------------------------------------------------------
         integer                         :: ready_        
@@ -4227,10 +4238,13 @@ cd1 : if ((ready_ .EQ. IDLE_ERR_     ) .OR.  &
                     Me%Param_forCS(28) = Me%ZooReferenceRespirationRate 
                
            List => Me%Param_forCS  
-           if (.not. associated(List)) stop 'ModuleWaterQuality-GetWQparameters- ERROR 01'
+           if (.not. associated(List))   stop 'ModuleWaterQuality-GetWQparameters- ERROR 01'
           
            GGR  => Me%GGR_forCS  
-           if (.not. associated(GGR)) stop 'ModuleWaterQuality-GetWQparameters- ERROR 02'
+           if (.not. associated(GGR))    stop 'ModuleWaterQuality-GetWQparameters- ERROR 02'
+           
+           GGRdia => Me%GGRdiat_forCS
+           if (.not. associated(GGRdia)) stop 'ModuleWaterQuality-GetWQparameters- ERROR 03'
            
            STAT_ = SUCCESS_
       else 
@@ -5407,6 +5421,14 @@ do1:    do while(associated(EquaRateFluxX))
                               * Me%TPhytoLimitationFactor                      &
                               * Me%PhytoLightLimitationFactor                  &
                               * Me%PhytoNutrientsLimitationFactor        
+        
+        
+         if(Me%PropCalc%Diatoms) then
+          Me%GGRdiat_forCS(index) = Me%Diatoms%DiaGrowMaxRate                   &   
+                                    * Me%Diatoms%DiaTempLimitationFactor        &
+                                    * Me%Diatoms%DiaLightLimitationFactor       &
+                                    * Me%Diatoms%DiaNutrientsLimitationFactor             
+         endif   
     !----------------------------------------------------------------------------
     end subroutine WQRatesforCS
     !----------------------------------------------------------------------------
@@ -9223,6 +9245,14 @@ cd4 :           if (associated(Me%NewMass)) then
                    nullify(Me%GGR_forCS )
                end if
                 
+               if (associated(Me%GGRdiat_forCS )) then
+                   deallocate(Me%GGRdiat_forCS, STAT = STAT_CALL)
+                   if (STAT_CALL .NE. SUCCESS_)                                 &
+                     stop 'Subroutine Kill_WaterQuality - ModuleWaterQuality. ERR06.'
+                   nullify(Me%GGRdiat_forCS )
+               end if
+               
+               
 
                 call DeallocateInstance
 

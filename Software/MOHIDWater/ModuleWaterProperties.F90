@@ -15765,6 +15765,7 @@ cd5:                if (TotalVolume > 0.) then
         type (T_Property),      pointer         :: PropertyX 
         real, pointer, dimension(:)             :: RatiosList
         real, pointer, dimension(:)             :: GGRate
+        real, pointer, dimension(:)             :: GGRateDiat
         !Begin-----------------------------------------------------------------
         if (MonitorPerformance) call StartWatch ("ModuleWaterProperties", "CarbonateSystem_Processes")  
                        
@@ -15778,7 +15779,7 @@ i1:       if (Me%ExternalVar%Now .GE. Me%Coupled%CarbonateSystem%NextCompute) th
              !Also, get several parameters stablished in WaterQuality.dat and some rates. Here should be 
              !added something similar for module LIFE (see getWQparam)
              call GetWQParam(InterfaceID   = Me%ObjInterface, Ratios_and_Param_for_CS = RatiosList, &
-                                                            GrossGrowthRate = GGRate, STAT = STAT_CALL)               
+                             GrossGrowthRate = GGRate, GrossGrowthRateDiat = GGRateDiat, STAT = STAT_CALL)               
                 if (STAT_CALL /= SUCCESS_) &
                 call CloseAllAndStop ('CarbonateSystem_Processes - ModuleWaterProperties - ERR00')
                               
@@ -15792,6 +15793,7 @@ i1:       if (Me%ExternalVar%Now .GE. Me%Coupled%CarbonateSystem%NextCompute) th
                                    Longitude         = Me%ExternalVar%Longitude,     &
                                    Ratios_forCS      = RatiosList,                   &
                                    GGR_cs            = GGRate,                       &
+                                   GGRd_cs           = GGRateDiat,                   &
                                    WaterVolume       = Me%ExternalVar%VolumeZ,       &                                     
                                    STAT              = STAT_CALL)                
                      if (STAT_CALL .NE. SUCCESS_)                                    &

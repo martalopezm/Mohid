@@ -255,6 +255,7 @@ Module ModuleInterface
         real,    pointer, dimension(:    )      :: Longitude1D               => null() !MartaLopez
         real,    pointer, dimension(:    )      :: Ratios1D                  => null() !MartaLopez
         real,    pointer, dimension(:    )      :: GGR1D                     => null() !MartaLopez
+        real,    pointer, dimension(:    )      :: GGRdia1D                  => null() !MartaLopez
         logical                                 :: CS_alk_yes                          !MartaLopez
         
 #ifdef _PHREEQC_        
@@ -3087,11 +3088,13 @@ cd14 :          if (Phosphorus) then
     !> used in WaterQuality.
     !>param[in] interfaceID !>param[out] Ratios_and_Param_for_CS, STAT
     !--------------------------------------------------------------------------
-    subroutine GetWQParam(interfaceID, Ratios_and_Param_for_CS, GrossGrowthRate, STAT)
+    subroutine GetWQParam(interfaceID, Ratios_and_Param_for_CS, GrossGrowthRate, &
+                                                       GrossGrowthRateDiat, STAT)
         !Arguments-------------------------------------------------------------
         integer                                            :: InterfaceID
         real, dimension(:), pointer, intent(OUT)           :: Ratios_and_Param_for_CS 
         real, dimension(:), pointer, intent(OUT)           :: GrossGrowthRate
+        real, dimension(:), pointer, intent(OUT), optional :: GrossGrowthRateDiat
         integer, optional, intent(OUT)                     :: STAT        
         !External--------------------------------------------------------------
         integer                                         :: ready_, STAT_CALL
@@ -3103,9 +3106,10 @@ cd14 :          if (Phosphorus) then
         call Ready(InterfaceID, ready_)        
         if ((ready_ .EQ. IDLE_ERR_) .OR. (ready_ .EQ. READ_LOCK_ERR_)) then   
              
-               call GetWQparameters(WaterQualityID = Me%ObjWaterQuality,   &
-                                    List = Ratios_and_Param_for_CS,        &
-                                    GGR  = GrossGrowthRate,                &
+               call GetWQparameters(WaterQualityID = Me%ObjWaterQuality,     &
+                                    List   = Ratios_and_Param_for_CS,        &
+                                    GGR    = GrossGrowthRate,                &
+                                    GGRdia = GrossGrowthRateDiat,            &
                                     STAT =  STAT_CALL)
                if (STAT_CALL /= SUCCESS_) stop 'GetWQParam - ModuleInterface - ERR01'
            
@@ -3623,7 +3627,7 @@ cd1 :   if ((ready_ .EQ. IDLE_ERR_) .OR. (ready_ .EQ. READ_LOCK_ERR_)) then
                                   LightExtCoefField, WaterPercentage,                   &
                                   DissolvedToParticulate3D, SoilDryDensity, Salinity,   &
                                   pH, IonicStrength, PhosphorusAdsortionIndex,          &
-                                  Latitude, Longitude, Ratios_forCS, GGR_cs,            & !martalopez                                 
+                                  Latitude, Longitude, Ratios_forCS, GGR_cs, GGRd_cs    & !martalopez                                 
                                   NintFac3D, NintFac3DR, PintFac3D,                     &
                                   RootsMort, PintFac3DR,                                &
                                   SedimCellVol3D,                                       &
@@ -3653,6 +3657,7 @@ cd1 :   if ((ready_ .EQ. IDLE_ERR_) .OR. (ready_ .EQ. READ_LOCK_ERR_)) then
         real,    optional, dimension(:,:  ), pointer    :: Longitude      !martalopez
         real,    optional, dimension(:    ), pointer    :: Ratios_forCS   !martalopez
         real,    optional, dimension(:    ), pointer    :: GGR_cs         !martalopez
+        real,    optional, dimension(:    ), pointer    :: GGRd_cs        !martalopez
         
         real,    optional, dimension(:,:,:), pointer    :: NintFac3D  !Isabella
         real,    optional, dimension(:,:,:), pointer    :: NintFac3DR  !Isabella
@@ -3793,6 +3798,7 @@ cd1 :   if (ready_ .EQ. IDLE_ERR_) then
 
             if(present(Ratios_forCS))Me%Ratios1D  => Ratios_forCS
             if(present(GGR_cs      ))Me%GGR1D     => GGR_cs
+            if(present(GGRd_cs     ))Me%GGRdia1D  => GGRd_cs
             
             Me%ExternalVar%WaterPoints3D => WaterPoints3D
             
@@ -4118,6 +4124,7 @@ cd4 :           if (ReadyToCompute) then
                                       Me%Longitude1D,                       &
                                       Me%Ratios1D,                          &
                                       Me%GGR1D,                             &
+                                      Me%GGRdia1D,                          &
                                       Me%WaterVolume1D,                     &                                 
                                       STAT = STAT_CALL)                                                 
                                       if (STAT_CALL /= SUCCESS_) stop 'Modify_Interface3D - ModuleInterface - ERR18b'  
@@ -4642,7 +4649,7 @@ do6 :               do index = ArrayLB, ArrayUB
                                   SoilDryDensity, Salinity, pH, IonicStrength,       &
                                   PhosphorusAdsortionIndex, WindVelocity,            &
                                   Oxygen1D, WaterVolume, CellArea,                   &
-                                  Latitude, Longitude, Ratios_forCS, GGR_cs,         & !martalopez 
+                                  Latitude, Longitude, Ratios_forCS, GGR_cs,GGRd_cs  & !martalopez 
                                   DTProp, STAT)
 
         !Arguments-------------------------------------------------------------
@@ -4670,6 +4677,7 @@ do6 :               do index = ArrayLB, ArrayUB
         real,    optional, dimension(:,:  ), pointer    :: Longitude      !martalopez
         real,    optional, dimension(:    ), pointer    :: Ratios_forCS   !martalopez
         real,    optional, dimension(:    ), pointer    :: GGR_cs         !martalopez
+        real,    optional, dimension(:    ), pointer    :: GGRd_cs         !martalopez
         real,    optional,  intent(IN)                  :: DTProp
         real,    optional, dimension(:), pointer        :: MacrOccupation, ShearStress, SPMFlux
         integer, optional,  intent(OUT)                 :: STAT
@@ -4739,6 +4747,7 @@ cd7 :       if (present(DTProp))then
                         
             if(present(Ratios_forCS))Me%Ratios1D  => Ratios_forCS
             if(present(GGR_cs      ))Me%GGR1D     => GGR_cs
+            if(present(GGRd_cs     ))Me%GGRdia1D  => GGRd_cs
 
 cd5 :       if (.not. Increment) then 
 
@@ -4981,6 +4990,7 @@ cd4 :           if (ReadyToCompute) then
                                       Me%Longitude1D,                       &
                                       Me%Ratios1D,                          &
                                       Me%GGR1D,                             &
+                                      Me%GGRdia1D,                          &
                                       Me%WaterVolume1D,                     &                                 
                                       STAT = STAT_CALL)                                                 
                                       if (STAT_CALL /= SUCCESS_) stop 'Modify_Interface1D - ModuleInterface - ERR18b'  
@@ -8752,6 +8762,11 @@ cd1 :   if (ready_ .NE. OFF_ERR_) then
                         if(associated(Me%GGR1D ))then
                            deallocate(Me%GGR1D , STAT = STAT_CALL)
                            if (STAT_CALL .NE. SUCCESS_) stop 'KillInterface - ModuleInterface - ERR35.1'
+                        end if
+                        
+                        if(associated(Me%GGRdia1D ))then
+                           deallocate(Me%GGRdia1D , STAT = STAT_CALL)
+                           if (STAT_CALL .NE. SUCCESS_) stop 'KillInterface - ModuleInterface - ERR35.2'
                         end if
                                               
                         call KillCarbonateSystem(Me%ObjCarbonateSystem, STAT = STAT_CALL)
