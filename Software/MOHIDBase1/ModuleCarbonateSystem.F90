@@ -192,7 +192,7 @@
       private ::   ComputeAlkalinity_bio               !Calculates alkalinity taking into account changes due to biological activity 
       private ::   ComputeAlkalinity_bio_calc          !" " but taking into account calcium carbonate processes too      
       private ::   ComputeDIC_calc                     !Calculates dissolved ingoranic carbon taking into account caco3 processes
-      private ::   ComputeDIC_no_calc                  !Calculates dissolved ingoranic carbon withou taking into account caco3 process
+      private ::   ComputeDIC_no_calc                  !Calculates dissolved ingoranic carbon withou taking into account caco3proces
       private ::     Compute_biogeoch_rates_nitr_denit  
       private ::     Compute_biogeoch_rates_resp
       private ::     Compute_biogeoch_rates_nitrogen_uptake
@@ -1155,7 +1155,7 @@ if1 :   if ((ready_ .EQ. IDLE_ERR_     ) .OR.                                 &
             Me%ExternalVar%VolumenZ                   => VolumenZ
                 if (.NOT. associated(Me%ExternalVar%VolumenZ))               &
                stop 'Subroutine ModifyCarbonateSystem - ModuleCarbonateSystem. ERR11'            
-                    
+            endif        
                        
             !Associates array dimension (external) to array dimension variable of this module(Me%Array%) 
             Me%Array%ILB = ArraySize%ILB
@@ -1572,18 +1572,18 @@ i3:     if (temp > 20.) then
                                                               + (yN_d + yP_d) * diatm_na_uptk                       &
                                                               + (yN_p - yP_p) * phyto_resp                          & 
                                                               + (yN_z - yP_z) * zoo_resp                            & 
-                                                              + (yN_d - yP_d) * diatm_resp                          &                                                      
+                                                              + (yN_d - yP_d) * diatm_resp                          &  
                                                               - Nitrif1                                             &  ! <- sinks
                                                               - Nitrif2                                             &
                                                               - (yP_p + yN_p) * phyto_am_uptk                       &   
-                                                              - (yP_d + yN_d) * diatm_am_uptk)                          
+                                                              - (yP_d + yN_d) * diatm_am_uptk                          
     
    case(3) !Phyto, Zoo and ciliates
        
            call Compute_biogeoch_rates_resp(index, phyto_resp, zoo_resp,& 
                                             cilia_respiration = cil_resp) 
           
-           call Compute_biogeoch_rates_nitrogen_uptake(phyto_am_uptk, phyto_na_uptk)
+           call Compute_biogeoch_rates_nitrogen_uptake(index, phyto_am_uptk, phyto_na_uptk)
                     
            Me%ExternalVar%Mass(Me%PropIndex%ALK_cs_b, Index) = Me%ExternalVar%Mass(Me%PropIndex%ALK_cs_b, Index)  &    
                                                                + (0.8 + yN_p - yP_p) * Denit                      & ! <- sources 
@@ -1593,8 +1593,8 @@ i3:     if (temp > 20.) then
                                                                + (yN_c - yP_c) * cil_resp                         & 
                                                                - Nitrif1                                          &  ! <- sinks
                                                                - Nitrif2                                          &
-                                                               - (yP_p + yN_p) * phyto_am_uptk                                                              
-       
+                                                               - (yP_p + yN_p) * phyto_am_uptk 
+           
     case(4) !Phyto, Zoo, ciliates and diatoms
           
            yN_pd = (yN_p + yN_d) / 2. 
@@ -1618,7 +1618,7 @@ i3:     if (temp > 20.) then
                                                               - Nitrif1                                            &  ! <- sinks
                                                               - Nitrif2                                            &
                                                               - (yP_p + yN_p) * phyto_am_uptk                      &   
-                                                              - (yP_d + yN_d) * diatm_am_uptk)  
+                                                              - (yP_d + yN_d) * diatm_am_uptk  
           
           
     end select
@@ -1670,6 +1670,8 @@ i3:     if (temp > 20.) then
      real           :: yP_d          !Diatoms P/C stoichometry ratio used in pelagic module
      real           :: yN_z          !Zooplankton N/C stoichometry ratio used in pelagic module
      real           :: yP_z          !Zooplankton P/C stoichometry ratio used in pelagic module
+     real           :: yN_c          !Ciliates N/C stoichometry ratio used in pelagic module
+     real           :: yP_c          !Ciliates P/C stoichometry ratio used in pelagic module
    !----------------------------------------------------------------------------------------------    
      yN_p = Me%ExternalRatio%NC_phyto    
      yP_p = Me%ExternalRatio%PC_phyto
@@ -1677,6 +1679,8 @@ i3:     if (temp > 20.) then
      yP_d = Me%ExternalRatio%PC_diatm
      yN_z = Me%ExternalRatio%NC_zoo
      yP_z = Me%ExternalRatio%PC_zoo    
+     yN_c = Me%ExternalRatio%NC_cilia
+     yP_c = Me%ExternalRatio%PC_cilia  
    !------------------------------------------------------------------------------------------------    
           
    call Compute_biogeoch_rates_nitr_denit (index, Nitrif1, Nitrif2, Denit) 
@@ -1721,8 +1725,8 @@ i3:     if (temp > 20.) then
                                                              !+  2. * CaCo3Disolution                              &
                                                               - Nitrif1                                            &  ! <- sinks
                                                               - Nitrif2                                            &
-                                                              - (yP_p + yN_p) * phyto_am_uptk                      !&    
-                                                              - (yP_d + yN_d) * diatm_am_uptk)                     &
+                                                              - (yP_p + yN_p) * phyto_am_uptk                      &    
+                                                              - (yP_d + yN_d) * diatm_am_uptk                     
                                                              !- 2. * CaCo3Precipitation  
     
     case(3) !Phyto, Zoo and ciliates
@@ -1730,7 +1734,7 @@ i3:     if (temp > 20.) then
           call Compute_biogeoch_rates_resp(index, phyto_resp, zoo_resp,& 
                                            cilia_respiration = cil_resp) 
           
-          call Compute_biogeoch_rates_nitrogen_uptake(phyto_am_uptk, phyto_na_uptk)
+          call Compute_biogeoch_rates_nitrogen_uptake(index, phyto_am_uptk, phyto_na_uptk)
                     
           Me%ExternalVar%Mass(Me%PropIndex%ALK_cs_b, Index) = Me%ExternalVar%Mass(Me%PropIndex%ALK_cs_b, Index) &    
                                                               + (0.8 + yN_p - yP_p) * Denit                     & ! <- sources 
@@ -1741,7 +1745,7 @@ i3:     if (temp > 20.) then
                                                              !+  2. * CaCo3Disolution                           &
                                                               - Nitrif1                                         &  ! <- sinks
                                                               - Nitrif2                                         &           
-                                                              - (yP_p + yN_p) * phyto_am_uptk                   &    
+                                                              - (yP_p + yN_p) * phyto_am_uptk                       
                                                              !- 2. * CaCo3Precipitation                           
        
     case(4) !Phyto, Zoo, ciliates and diatoms
@@ -1768,7 +1772,7 @@ i3:     if (temp > 20.) then
                                                               - Nitrif1                                            &  ! <- sinks
                                                               - Nitrif2                                            &
                                                               - (yP_p + yN_p) * phyto_am_uptk                      &   
-                                                              - (yP_d + yN_d) * diatm_am_uptk)                     &
+                                                              - (yP_d + yN_d) * diatm_am_uptk
                                                              !- 2. * CaCo3Precipitation           
           
    end select
@@ -1841,7 +1845,7 @@ subroutine ComputeDIC_calc(index)
                                                              !+ caco3disolution                    &           ! <- sources 
                                                               + phyto_resp                         &  
                                                               + zoo_resp                           & 
-                                                              + diatm_resp                         &                                                      
+                                                              + diatm_resp                         &
                                                              !- caco3precipit                      &           ! <- sinks                                                          
                                                               - phyto_am_uptk                      &     
                                                               - diatm_am_uptk                      &        
@@ -1851,16 +1855,16 @@ subroutine ComputeDIC_calc(index)
     case(3) !Phyto, Zoo and ciliates
           call Compute_biogeoch_rates_resp(index, phyto_resp, zoo_resp,& 
                                            cilia_respiration = cil_resp)           
-          call Compute_biogeoch_rates_nitrogen_uptake(phyto_am_uptk, phyto_na_uptk)
+          call Compute_biogeoch_rates_nitrogen_uptake(index, phyto_am_uptk, phyto_na_uptk)
                     
-          Me%ExternalVar%Mass(Me%PropIndex%%DIC_cs_c, Index) = Me%ExternalVar%Mass(Me%PropIndex%DIC_cs_c, Index) &    
+          Me%ExternalVar%Mass(Me%PropIndex%DIC_cs_c, Index) = Me%ExternalVar%Mass(Me%PropIndex%DIC_cs_c, Index) &    
                                                                !+ caco3disolution                     &          ! <- sources 
                                                                + phyto_resp                          &  
                                                                + zoo_resp                            & 
-                                                               + cil_resp                            &                                                      
+                                                               + cil_resp                            &
                                                               !- caco3precipit                       &           ! <- sinks                                                          
                                                                - phyto_am_uptk                       &    
-                                                               - phyto_na_uptk                       &   
+                                                               - phyto_na_uptk                         
                                                                                                                        
        
     case(4) !Phyto, Zoo, ciliates and diatoms    
@@ -1874,7 +1878,7 @@ subroutine ComputeDIC_calc(index)
            call Compute_biogeoch_rates_nitrogen_uptake(index, phyto_am_uptk, phyto_na_uptk,  &
                                                                diatm_am_uptk, diatm_na_uptk )
            
-           Me%ExternalVar%Mass(Me%PropIndex%%DIC_cs_c, Index) = Me%ExternalVar%Mass(Me%PropIndex%DIC_cs_c, Index)  &    
+           Me%ExternalVar%Mass(Me%PropIndex%DIC_cs_c, Index) = Me%ExternalVar%Mass(Me%PropIndex%DIC_cs_c, Index)  &    
                                                               !+ caco3disolution                    &         ! <- sources                       
                                                               + phyto_resp                         & 
                                                               + zoo_resp                           & 
@@ -1954,14 +1958,14 @@ end subroutine ComputeDIC_calc
        
          call Compute_biogeoch_rates_resp(index, phyto_resp, zoo_resp,& 
                                            cilia_respiration = cil_resp)           
-         call Compute_biogeoch_rates_nitrogen_uptake(phyto_am_uptk, phyto_na_uptk)
+         call Compute_biogeoch_rates_nitrogen_uptake(index, phyto_am_uptk, phyto_na_uptk)
                     
          Me%ExternalVar%Mass(Me%PropIndex%DIC_cs_nc, Index) = Me%ExternalVar%Mass(Me%PropIndex%DIC_cs_nc, Index) &       
                                                              + phyto_resp                          &     ! <- sources 
                                                              + zoo_resp                            & 
-                                                             + cil_resp                            &                                                                  
+                                                             + cil_resp                            &
                                                              - phyto_am_uptk                       &     ! <- sinks  
-                                                             - phyto_na_uptk                       &   
+                                                             - phyto_na_uptk                          
                                                                                                                        
        
    case(4) !Phyto, Zoo, ciliates and diatoms 
@@ -1979,7 +1983,7 @@ end subroutine ComputeDIC_calc
                                                                + phyto_resp                         &    ! <- sources 
                                                                + zoo_resp                           & 
                                                                + diatm_resp                         &  
-                                                               + cil_resp                           &                                                                                                              
+                                                               + cil_resp                           &
                                                                - phyto_am_uptk                      &    ! <- sinks      
                                                                - diatm_am_uptk                      &   
                                                                - phyto_na_uptk                      &  

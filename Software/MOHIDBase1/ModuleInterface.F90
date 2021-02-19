@@ -3627,7 +3627,7 @@ cd1 :   if ((ready_ .EQ. IDLE_ERR_) .OR. (ready_ .EQ. READ_LOCK_ERR_)) then
                                   LightExtCoefField, WaterPercentage,                   &
                                   DissolvedToParticulate3D, SoilDryDensity, Salinity,   &
                                   pH, IonicStrength, PhosphorusAdsortionIndex,          &
-                                  Latitude, Longitude, Ratios_forCS, GGR_cs, GGRd_cs    & !martalopez                                 
+                                  Latitude, Longitude, Ratios_forCS, GGR_cs, GGRd_cs,   & !martalopez                                 
                                   NintFac3D, NintFac3DR, PintFac3D,                     &
                                   RootsMort, PintFac3DR,                                &
                                   SedimCellVol3D,                                       &
@@ -4649,7 +4649,7 @@ do6 :               do index = ArrayLB, ArrayUB
                                   SoilDryDensity, Salinity, pH, IonicStrength,       &
                                   PhosphorusAdsortionIndex, WindVelocity,            &
                                   Oxygen1D, WaterVolume, CellArea,                   &
-                                  Latitude, Longitude, Ratios_forCS, GGR_cs,GGRd_cs  & !martalopez 
+                                  Latitude, Longitude, Ratios_forCS, GGR_cs,GGRd_cs, & !martalopez 
                                   DTProp, STAT)
 
         !Arguments-------------------------------------------------------------
