@@ -634,7 +634,7 @@ cd0 : if (ready_ .EQ. OFF_ERR_) then
         if (STAT_CALL .NE. SUCCESS_) stop 'ConstructModelOptions - ModuleCarbonateSystem - ERROR #9'   
        
        !...............
-        write(*,*)" ------------ CARBONATE SYSTEM OPTIONS  ------------    "
+        write(*,*)" ------------ MARINE CARBONATE SYSTEM OPTIONS  ------------    "
         write(*,*)"                                        "
         write(*,*)" Alkalinity   - parametrized --------  :", Me%ComputeOptions%NoBiologicalAlkalinity
         write(*,*)" Alkalinity   - biological   --------  :", Me%ComputeOptions%BiologicalAlkalinity
@@ -1143,19 +1143,20 @@ if1 :   if ((ready_ .EQ. IDLE_ERR_     ) .OR.                                 &
             if (.NOT. associated(Me%ExternalVar%Longitude))           &
                stop 'Subroutine ModifyCarbonateSystem - ModuleCarbonateSystem. ERR07'                                      
             Me%ExternalVar%Ratios                     => Ratios
-                if (.NOT. associated(Me%ExternalVar%Ratios))               &
+            if (.NOT. associated(Me%ExternalVar%Ratios))              &
                stop 'Subroutine ModifyCarbonateSystem - ModuleCarbonateSystem. ERR08'
             Me%ExternalVar%GrossGrowthRate            => GrossGrowthRate 
-                if (.NOT. associated(Me%ExternalVar%GrossGrowthRate ))      &
+            if (.NOT. associated(Me%ExternalVar%GrossGrowthRate ))    &
                stop 'Subroutine ModifyCarbonateSystem - ModuleCarbonateSystem. ERR09'  
-            if(present (GrossGrowthRateDiat))then
-            Me%ExternalVar%GrossGrowthRateDiat        => GrossGrowthRateDiat 
-                if (.NOT. associated(Me%ExternalVar%GrossGrowthRateDiat ))      &
-               stop 'Subroutine ModifyCarbonateSystem - ModuleCarbonateSystem. ERR10'       
             Me%ExternalVar%VolumenZ                   => VolumenZ
-                if (.NOT. associated(Me%ExternalVar%VolumenZ))               &
-               stop 'Subroutine ModifyCarbonateSystem - ModuleCarbonateSystem. ERR11'            
-            endif        
+            if (.NOT. associated(Me%ExternalVar%VolumenZ))             &
+               stop 'Subroutine ModifyCarbonateSystem - ModuleCarbonateSystem. ERR10'     
+                            
+            if(Me%ComputeOptions%Diatoms)then
+            Me%ExternalVar%GrossGrowthRateDiat        => GrossGrowthRateDiat 
+            if (.NOT. associated(Me%ExternalVar%GrossGrowthRateDiat ))      &
+               stop 'Subroutine ModifyCarbonateSystem - ModuleCarbonateSystem. ERR11'   
+            endif   
                        
             !Associates array dimension (external) to array dimension variable of this module(Me%Array%) 
             Me%Array%ILB = ArraySize%ILB
@@ -1189,8 +1190,8 @@ d1:         do index = Me%Array%ILB, Me%Array%IUB
             nullify(Me%ExternalVar%Longitude  )  
             nullify(Me%ExternalVar%Ratios     ) 
             nullify(Me%ExternalVar%GrossGrowthRate)
-            if(present (GrossGrowthRateDiat))then
-            nullify(Me%ExternalVar%GrossGrowthRate) 
+            if(Me%ComputeOptions%Diatoms)then
+            nullify(Me%ExternalVar%GrossGrowthRateDiat) 
             endif
                         
             STAT_ = SUCCESS_
@@ -2251,8 +2252,8 @@ end subroutine ComputeDIC_calc
        end if         
    
      !    (DtDay)       =      (dimensionless)           *      (d-1)     
-     phyto_ammonia_uptk = AmmoniaPreferenceFactor        * Me%ExternalVar%GrossGrowthRateDiat(index)                  
-     phyto_nitrate_uptk = (1. - AmmoniaPreferenceFactor) * Me%ExternalVar%GrossGrowthRateDiat(index)
+     phyto_ammonia_uptk = AmmoniaPreferenceFactor        * Me%ExternalVar%GrossGrowthRate(index)                  
+     phyto_nitrate_uptk = (1. - AmmoniaPreferenceFactor) * Me%ExternalVar%GrossGrowthRate(index)
        
 
      ! [mgC/l]         =       (DtDay)      *      (1/Days)        *               [mgC/l]  

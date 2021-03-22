@@ -4243,8 +4243,10 @@ cd1 : if ((ready_ .EQ. IDLE_ERR_     ) .OR.  &
            GGR  => Me%GGR_forCS  
            if (.not. associated(GGR))    stop 'ModuleWaterQuality-GetWQparameters- ERROR 02'
            
+           if (Me%PropCalc%Diatoms) then  
            GGRdia => Me%GGRdiat_forCS
            if (.not. associated(GGRdia)) stop 'ModuleWaterQuality-GetWQparameters- ERROR 03'
+           endif
            
            STAT_ = SUCCESS_
       else 
